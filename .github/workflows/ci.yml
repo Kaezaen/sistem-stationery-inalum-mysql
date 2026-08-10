@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (PHP 8.4 + PostgreSQL)
+    runs-on: ubuntu-latest
+
+    # Service container hanya dipakai CI. Ketentuan "tanpa Docker" berlaku untuk
+    # deployment produksi (lihat ADR & roadmap), bukan untuk runner pengujian.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: taajri_stationery_test
+          POSTGRES_USER: taajri
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql, mbstring, bcmath, intl, gd, zip
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Siapkan environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Lint (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Analisis statis (PHPStan level 6)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Uji batas modul
+        run: vendor/bin/pest --testsuite=Architecture
+
+      - name: Uji lengkap
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: taajri_stationery_test
+          DB_USERNAME: taajri
+          DB_PASSWORD: secret
+        run: vendor/bin/pest
+
+  frontend:
+    name: Frontend (React 19 + TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Cek tipe
+        run: npm run types
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Cek format
+        run: npm run format:check
+
+      - name: Build produksi
+        run: npm run build

@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.{ts,tsx}';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Token shadcn/ui — dipetakan ke utility Tailwind v4.
+ *
+ * Palette Inalum (disetujui pengguna):
+ *   Primary  #2563EB   Secondary #64748B   Tertiary #BC4800   Neutral #757681
+ * Font: Poppins (menggantikan Inter).
+ */
+@theme inline {
+    --font-sans:
+        Poppins, ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-tertiary: var(--tertiary);
+    --color-tertiary-foreground: var(--tertiary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+    --radius: 0.75rem;
+
+    --background: #f5f7fb; /* abu kebiruan lembut — latar halaman (mockup) */
+    --foreground: #1e293b; /* slate-800 */
+    --card: #ffffff;
+    --card-foreground: #1e293b;
+    --popover: #ffffff;
+    --popover-foreground: #1e293b;
+
+    --primary: #2563eb; /* Inalum blue */
+    --primary-foreground: #ffffff;
+    --secondary: #eef2f8; /* slate lembut untuk tombol sekunder */
+    --secondary-foreground: #334155;
+    --tertiary: #bc4800; /* oranye/rust — aksen */
+    --tertiary-foreground: #ffffff;
+
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b; /* Secondary palette — teks redup */
+    --accent: #e8f0fe; /* biru muda — hover/aktif navigasi */
+    --accent-foreground: #1d4ed8;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+
+    --border: #e2e8f0; /* slate-200 */
+    --input: #e2e8f0;
+    --ring: #2563eb;
+
+    --sidebar: #ffffff;
+    --sidebar-foreground: #1e293b;
+}
+
+.dark {
+    --background: #0b1220; /* slate sangat gelap */
+    --foreground: #e6edf5;
+    --card: #131c2e;
+    --card-foreground: #e6edf5;
+    --popover: #131c2e;
+    --popover-foreground: #e6edf5;
+
+    --primary: #3b82f6; /* biru sedikit lebih terang agar kontras di gelap */
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #e6edf5;
+    --tertiary: #ea6a1e;
+    --tertiary-foreground: #ffffff;
+
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #1d2b45;
+    --accent-foreground: #93c5fd;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+
+    --border: rgba(255, 255, 255, 0.09);
+    --input: rgba(255, 255, 255, 0.12);
+    --ring: #3b82f6;
+
+    --sidebar: #0f1729;
+    --sidebar-foreground: #e6edf5;
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}

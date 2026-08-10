@@ -1,0 +1,22 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+
+    # PHPDoc Laravel kerap menyatakan tipe lebih sempit daripada kenyataan runtime.
+    # Contohnya Seeder::$command dianggap non-nullable padahal bernilai null saat
+    # seeder dipanggil di luar konteks artisan. Tanpa setelan ini, PHPStan menuntut
+    # penghapusan nullsafe yang justru dibutuhkan agar tidak error saat dijalankan.
+    treatPhpDocTypesAsCertain: false
+
+    paths:
+        - app
+        - database
+        - routes
+
+    # Aturan §2.2 Architecture Blueprint ditegakkan oleh tests/Architecture,
+    # bukan PHPStan — analisis statis di sini fokus pada keamanan tipe.
+
+    excludePaths:
+        - app/Modules/*/Http/Requests/*
