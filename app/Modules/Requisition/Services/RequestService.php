@@ -78,6 +78,18 @@ class RequestService
     /** Mengajukan request pertama kali — masuk antrian Pimpinan User. */
     public function submit(Request $request): Request
     {
+        $request->loadMissing('requester');
+
+        // Approval L1 diarahkan ke atasan langsung (users.manager_id). Requester
+        // tanpa atasan tidak punya tujuan approval — bila dibiarkan, request akan
+        // mandek permanen di "Pending Approval Pimpinan" tanpa bisa disetujui
+        // siapa pun. Ditolak di depan, bukan dibiarkan menggantung.
+        if ($request->requester?->manager_id === null) {
+            throw new BusinessRuleException(
+                'Request tidak dapat diajukan karena Anda belum memiliki atasan (Pimpinan User) yang ditetapkan. Hubungi administrator untuk menetapkan atasan Anda terlebih dahulu.',
+            );
+        }
+
         return $this->transition($request, RequestAction::Submit, function (Request $r): void {
             $r->loadMissing('items');
 

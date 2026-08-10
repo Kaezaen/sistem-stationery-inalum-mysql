@@ -18,6 +18,7 @@ use App\Shared\Http\Controllers\Controller;
 use App\Shared\Support\PaginatedPayload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -79,11 +80,18 @@ class RequestController extends Controller
         $data = $httpRequest->validated();
 
         try {
-            $request = $this->requests->create($httpRequest->user(), $data['items'], $data['notes'] ?? null);
+            // create() dan submit() masing-masing transaksional; dibungkus agar
+            // atomik — bila submit gagal (mis. requester tanpa atasan), draft
+            // tidak tertinggal menggantung.
+            $request = DB::transaction(function () use ($httpRequest, $data): Request {
+                $created = $this->requests->create($httpRequest->user(), $data['items'], $data['notes'] ?? null);
 
-            // Wireframe 3.1.2 hanya punya tombol "Submit Request" — dokumen
-            // langsung masuk antrian Pimpinan, tidak berhenti sebagai draft.
-            $this->requests->submit($request);
+                // Wireframe 3.1.2 hanya punya tombol "Submit Request" — dokumen
+                // langsung masuk antrian Pimpinan, tidak berhenti sebagai draft.
+                $this->requests->submit($created);
+
+                return $created;
+            });
         } catch (BusinessRuleException $e) {
             throw $e->toValidationException('items');
         }

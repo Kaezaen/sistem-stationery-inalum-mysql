@@ -217,60 +217,65 @@ php -d memory_limit=512M vendor/pestphp/pest/bin/pest
 
 ## Pengembangan Selanjutnya & Troubleshooting
 
-Sistem sudah fungsional dan teruji (**229 test hijau**), tetapi UAT dapat memunculkan
-kendala **lingkungan** (bukan logika). Catat setiap temuan di bagian ini agar sesi
-pengembangan berikutnya — termasuk di window/mesin lain — bisa cepat menindaklanjuti.
+Sistem sudah fungsional dan teruji (**230 test hijau**). Bagian ini merangkum jebakan yang
+sudah ditemukan saat UAT beserta perbaikannya — catat temuan baru di sini agar sesi
+berikutnya (termasuk di window/mesin lain) cepat menindaklanjuti.
 
-### ⚠️ Tombol Approve/Reject tidak muncul di PIC Stationery (L2)
+### ⚠️ Request mandek di "Pending Approval Pimpinan" / approver tidak bisa menyetujui — SUDAH DIPERBAIKI
 
-**Gejala:** request yang sudah disetujui approver **L1** berpindah ke PIC Stationery
-(status `PENDING_STATIONERY`), tetapi layar _Verify_ tampil **tanpa** tombol
-`Submit`/`Ditolak Seluruhnya` dan tanpa input _Quantity Actual_.
+**Akar masalah.** Approval **Level 1** diarahkan ke **atasan langsung** requester
+(`users.manager_id`), bukan ke role global — lihat
+[`RequestPolicy::approveL1`](app/Modules/Requisition/Policies/RequestPolicy.php) +
+`User::isDirectManagerOf()`. Bila sebuah request dibuat oleh akun **tanpa `manager_id`**
+(mis. akun `admin` pada seeder demo), **tidak ada satu pun user** yang memenuhi syarat
+approver L1 → request menggantung permanen di `PENDING_SUPERVISOR`, dan approver mana pun
+(termasuk `vp.sga`) tidak melihat tombol Setujui/Tolak. Inilah kasus **REQ004** (requester
+"Administrator Sistem", `manager_id = NULL`).
 
-**Hasil investigasi (kode sudah benar):**
+**Perbaikan yang diterapkan.**
+[`RequestService::submit()`](app/Modules/Requisition/Services/RequestService.php) kini
+**menolak pengajuan** bila requester belum punya atasan, dengan pesan yang jelas, dan
+`RequestController::store()` membungkus create+submit dalam satu transaksi agar tidak
+menyisakan draft menggantung (diuji di `RequestWorkflowTest`). Jadi request "yatim"
+semacam REQ004 tidak akan terbentuk lagi.
 
-- Tombol digerbangi prop `canDecide` dari
-  [`RequestApprovalController::canDecide()`](app/Modules/Requisition/Http/Controllers/RequestApprovalController.php)
-  = `Gate::can('approveL2', $request)`.
-- [`RequestPolicy::approveL2`](app/Modules/Requisition/Policies/RequestPolicy.php)
-  = punya permission `request.approve.l2` **DAN** status `PENDING_STATIONERY`. **Benar.**
-- Frontend [`Verify/Show.tsx`](resources/js/pages/Requests/Verify/Show.tsx) menampilkan
-  tombol pada `{canDecide && …}` dan stepper kuantitas pada `mode === 'l2' && canDecide`. **Benar.**
-- Policy _terdaftar_ dan berfungsi (tombol L1 muncul & approve L1 berhasil).
-- Akun `pic.stationery` di DB dev **punya** `request.approve.l2` (tinker: `YES`).
-- 229 test hijau, termasuk otorisasi approval L1/L2/L3.
+**Untuk data/UAT.** Pastikan **setiap requester punya `manager_id`** (di produksi berasal
+dari impor HR); akun `admin` sebaiknya **tidak** dipakai mengajukan request. Uji alur
+lengkap memakai `mawan` (atasannya `ms.sit`):
+`mawan` → `ms.sit` (L1) → `pic.stationery` (L2) → `vp.sga` (L3) → `pic.gudang` (serah
+terima). Password semua akun demo: `password`.
 
-**Kesimpulan:** ini **bukan bug logika**. Jika tombol hilang, `canDecide` bernilai
-`false` karena pemeriksaan permission gagal **di lingkungan yang menjalankan aplikasi**.
-Penyebab paling mungkin, urut dari yang tersering — jalankan perbaikannya di lingkungan Anda:
+### Tombol Approve/Reject tidak muncul di layar Verify (L1/L2/L3)
 
-1. **Cache permission spatie basi** (paling sering setelah seed/ubah role):
+Tombol digerbangi prop `canDecide` = `Gate::can('approveL{1,2,3}', $request)`. Bila untuk
+request yang **valid** (requester punya atasan, status benar, akun & level tepat) tombol
+tetap tidak muncul, periksa berurutan di lingkungan Anda:
+
+1. **Level & akun sudah tepat?** "Pending Approval Pimpinan" = L1 (atasan langsung),
+   "Pending Approval PIC Stationery" = L2 (`pic.stationery`), "Pending Approval Pimpinan
+   SGA" = L3 (`vp.sga`). Approver level lain memang tidak melihat tombol.
+2. **Cache permission spatie basi** (sering setelah seed/ubah role):
    ```bash
    php artisan permission:cache-reset
    php artisan optimize:clear
    ```
-2. **Aset frontend basi** — karena `composer dev`/Vite tidak berjalan di Windows, browser
+3. **Aset frontend basi** — karena `composer dev`/Vite tidak berjalan di Windows, browser
    memuat build lama. Bangun ulang lalu _hard refresh_ (Ctrl+Shift+R):
    ```bash
    npm run build
    ```
-3. **Akun PIC belum ter-seed permission-nya.** Verifikasi cepat:
+4. **Akun belum ter-seed permission-nya.** Verifikasi cepat (contoh L2):
    ```bash
    php artisan tinker --execute="echo App\Modules\Identity\Models\User::where('username','pic.stationery')->first()?->can('request.approve.l2') ? 'YES' : 'NO';"
    ```
-   Bila `NO`, seed ulang role/permission:
+   Bila `NO`, seed ulang lalu reset cache:
    ```bash
    php artisan db:seed --class="Database\Seeders\RolePermissionSeeder"
    php artisan permission:cache-reset
    ```
 
-**Cara reproduksi untuk verifikasi:** buat request → approve sebagai approver L1 →
-login sebagai `pic.stationery` → buka request berstatus `PENDING_STATIONERY`. Tombol
-`Submit` + `Ditolak Seluruhnya` dan input `Quantity Actual` harus muncul.
-
-> Catatan: "salah satu contoh" — selama UAT, verifikasi juga alur L3 (PENDING_SGA),
-> penerbitan PO, dan penerimaan barang dengan pola diagnosis yang sama
-> (`canDecide` → permission → status → cache → build).
+> Selama UAT, verifikasi juga penerbitan PO dan penerimaan barang dengan pola diagnosis
+> yang sama (`canDecide` → level → permission → status → cache → build).
 
 ### Reminder dev di Windows
 
