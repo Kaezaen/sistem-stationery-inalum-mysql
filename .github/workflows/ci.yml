@@ -11,25 +11,28 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (PHP 8.4 + PostgreSQL)
+    name: Backend (PHP 8.4 + MySQL)
     runs-on: ubuntu-latest
 
     # Service container hanya dipakai CI. Ketentuan "tanpa Docker" berlaku untuk
-    # deployment produksi (lihat ADR & roadmap), bukan untuk runner pengujian.
+    # deployment produksi (lihat roadmap), bukan untuk runner pengujian. MySQL 8.0
+    # (>= 8.0.16) menegakkan CHECK constraint — prasyarat uji integritas T4/T5/T11.
     services:
-      postgres:
-        image: postgres:16
+      mysql:
+        image: mysql:8.0
         env:
-          POSTGRES_DB: taajri_stationery_test
-          POSTGRES_USER: taajri
-          POSTGRES_PASSWORD: secret
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: taajri_stationery_test
+          MYSQL_USER: taajri
+          MYSQL_PASSWORD: secret
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
 
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +41,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, pgsql, mbstring, bcmath, intl, gd, zip
+          extensions: pdo_mysql, mbstring, bcmath, intl, gd, zip
           coverage: none
 
       - name: Cache Composer
@@ -65,9 +68,9 @@ jobs:
 
       - name: Uji lengkap
         env:
-          DB_CONNECTION: pgsql
+          DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
-          DB_PORT: 5432
+          DB_PORT: 3306
           DB_DATABASE: taajri_stationery_test
           DB_USERNAME: taajri
           DB_PASSWORD: secret
