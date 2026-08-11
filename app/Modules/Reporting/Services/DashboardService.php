@@ -94,9 +94,9 @@ class DashboardService
         $counts = DB::table('requests')
             ->when($departmentIds !== null, fn (Builder $q): Builder => $q->whereIn('department_id', $departmentIds ?? []))
             ->where('request_date', '>=', $start->toDateString())
-            ->selectRaw("to_char(request_date, 'YYYY-MM') as ym")
+            ->selectRaw("DATE_FORMAT(request_date, '%Y-%m') as ym")
             ->selectRaw('COUNT(*) as c')
-            ->groupByRaw("to_char(request_date, 'YYYY-MM')")
+            ->groupByRaw("DATE_FORMAT(request_date, '%Y-%m')")
             ->pluck('c', 'ym');
 
         $trend = [];

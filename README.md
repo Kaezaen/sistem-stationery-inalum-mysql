@@ -1,9 +1,36 @@
-# Sistem Stationery — PT Indonesia Asahan Aluminium
+# Sistem Stationery — PT Indonesia Asahan Aluminium (Inalum)
 
-Sistem pengajuan dan verifikasi pembelian Alat Tulis Kantor (ATK), dibangun dari
-`Blueprint Pengembangan Sistem-Stationery_REV1.0` (disetujui 23 Juni 2025).
+Aplikasi internal untuk **standarisasi pengajuan dan verifikasi pembelian Alat Tulis
+Kantor (ATK)**. Inti alurnya: *request → approval 3 level → serah terima → stok berkurang*,
+dilengkapi modul pembelian, 8 laporan + dashboard, notifikasi in-app/email, dan audit trail.
 
-**Status:** Fase 0–8 ✅ — alur bisnis inti blueprint **lengkap end-to-end**: request → 3 level approval → serah terima → stok berkurang, ditambah **8 laporan + dashboard + export Excel/PDF**, dan **notifikasi (N1–N12) in-app + email, inbox, serta audit trail**. 224 test hijau terhadap PostgreSQL. Fase 9 (UAT & Go-Live) berikutnya.
+Prinsip yang dijaga sistem:
+
+- **Ledger adalah sumber kebenaran stok.** `inventory_transactions` bersifat *append-only*;
+  `items.stock_quantity` hanyalah cache yang selalu bisa direkonstruksi dari ledger. Hanya
+  satu kelas (`StockService`) yang boleh menulis stok.
+- **Stok hanya bergerak di dua titik:** MASUK saat pembelian **diverifikasi**, KELUAR saat
+  barang **diserahkan** — bukan saat diinput atau disetujui.
+- **Otorisasi berlapis dua:** *Permission* (boleh akses fitur?) + *Policy* (boleh atas
+  dokumen INI, dalam status INI?).
+- **Semua nilai uang** `DECIMAL(18,2)`, tidak pernah `float`. Data historis dipertahankan penuh.
+
+---
+
+## Daftar Isi
+
+1. [Tech Stack](#tech-stack)
+2. [Prasyarat](#prasyarat)
+3. [Instalasi](#instalasi)
+4. [Menjalankan Aplikasi](#menjalankan-aplikasi)
+5. [Alur Request & Peran](#alur-request--peran)
+6. [Akun Demo](#akun-demo)
+7. [Struktur Modul](#struktur-modul)
+8. [Perintah Operasional Stok](#perintah-operasional-stok)
+9. [Notifikasi & Queue](#notifikasi--queue)
+10. [Laporan & Dashboard](#laporan--dashboard)
+11. [Pengujian & Kualitas Kode](#pengujian--kualitas-kode)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -14,77 +41,92 @@ Sistem pengajuan dan verifikasi pembelian Alat Tulis Kantor (ATK), dibangun dari
 | Backend | Laravel 12 · PHP 8.4 |
 | Frontend | React 19 · TypeScript · InertiaJS 2 |
 | UI | TailwindCSS 4 · shadcn/ui · Poppins · motion (animasi) |
-| Database | PostgreSQL 16+ |
-| Auth | Laravel Built-in Auth + RBAC (`spatie/laravel-permission`) |
-| Arsitektur | Monolith Modular · Service Layer Pattern |
-| Deployment | Nginx + PHP-FPM + Supervisor + Cron (**tanpa Docker**) |
+| Database | **MySQL 8.0.16+** (InnoDB, `utf8mb4`) |
+| Auth | Laravel Auth + RBAC (`spatie/laravel-permission`) |
+| Arsitektur | Monolith Modular · Service Layer |
+| Deployment | Nginx + PHP-FPM + Supervisor + Cron (tanpa Docker) |
 
 ---
 
-## Dokumentasi
+## Prasyarat
 
-> **Melanjutkan pekerjaan ini di sesi baru? Baca [docs/HANDOVER.md](docs/HANDOVER.md) lebih
-> dulu.** Dokumen itu memuat temuan analisis blueprint, keputusan yang sudah dikunci, dan
-> daftar jebakan yang sudah pernah ditabrak — hal-hal yang tidak dapat disimpulkan hanya
-> dengan membaca kode.
+- **PHP 8.4** dengan ekstensi: `pdo_mysql`, `mbstring`, `openssl`, `intl`, `bcmath`, `fileinfo`, `zip`.
+- **MySQL 8.0.16 atau lebih baru** — **wajib**. Seluruh "jaring pengaman database" bergantung
+  pada `CHECK constraint` yang **ditegakkan**. MySQL < 8.0.16 dan sebagian MariaDB
+  *mem-parse tapi mengabaikan* `CHECK`, sehingga data rusak dapat tersimpan diam-diam.
+  Gunakan engine **InnoDB** (default) dan charset **`utf8mb4`**.
+- **Node.js 20+** dan **npm**.
+- **Composer 2**.
 
-| Dokumen | Isi |
-|---|---|
-| **[HANDOVER.md](docs/HANDOVER.md)** | **Serah terima konteks — baca pertama** |
-| [Arsitektur](docs/architecture/README.md) | Indeks seluruh dokumen arsitektur |
-| [Analisis Requirement](docs/architecture/01-requirement-analysis.md) | Proses bisnis, aktor, modul, workflow, keputusan D1–D8 |
-| [Architecture Blueprint](docs/architecture/02-architecture-blueprint.md) | Diagram, 12 ADR, folder structure |
-| [Database Schema](docs/architecture/03-database-schema.md) | DDL 17 tabel, constraint, uji integritas |
-| [Roadmap](docs/architecture/04-roadmap.md) | 15 sprint, deployment, risiko |
-| [Setup Development](docs/development-setup.md) | Prasyarat mesin developer |
-
-**Baca [Setup Development](docs/development-setup.md) lebih dulu** — ada ekstensi PHP
-yang harus diaktifkan dan Laravel wajib dipin ke versi 12.
-
----
-
-## Menjalankan Secara Lokal
+Verifikasi versi server sebelum lanjut:
 
 ```bash
+mysql -u root -p -e "SELECT VERSION();"   # harus >= 8.0.16
+```
+
+---
+
+## Instalasi
+
+```bash
+# 1. Dependensi
 composer install
 npm install
+
+# 2. Environment
 cp .env.example .env
 php artisan key:generate
 ```
 
-Sesuaikan kredensial PostgreSQL di `.env`, lalu:
+Buat dua database (aplikasi + pengujian), lalu isi kredensialnya di `.env`:
+
+```bash
+mysql -u root -p -e "CREATE DATABASE taajri_stationery CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p -e "CREATE DATABASE taajri_stationery_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+`.env` (bagian database):
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=taajri_stationery
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+Jalankan migrasi + seeder, lalu isi saldo awal stok:
 
 ```bash
 php artisan migrate --seed
+php artisan stock:seed-initial --reason="Saldo awal"
+php artisan stock:snapshot --current
 ```
 
-Seeder membuat role, permission, departemen awal, **katalog 236 item Inalum** (dari
-`database/data/stationery-items.csv`), dan — di luar produksi — satu akun demo per aktor
-dengan kata sandi `password`:
+`migrate --seed` membuat role & permission, struktur departemen, **katalog 236 item Inalum**
+(dari `database/data/stationery-items.csv`), dan — di luar produksi — **organisasi demo**
+(28 akun) untuk pengujian alur. Semua kata sandi demo: `password`.
 
-| Username | Peran | Atasan |
-|---|---|---|
-| `admin` | Administrator | — |
-| `vp.sga` | Pimpinan SGA (approval L3) | — |
-| `ms.sit` | Pimpinan User (approval L1) | — |
-| `pic.stationery` | PIC Stationery (approval L2) | vp.sga |
-| `pic.gudang` | PIC Gudang (pembelian & serah terima) | vp.sga |
-| `mawan` | Requester | ms.sit |
+> **Catatan zona waktu.** Aplikasi berjalan pada UTC dan koneksi MySQL dipaksa ke `+00:00`
+> (`config/database.php`). Timestamp disimpan UTC; konversi tampilan ke Asia/Jakarta
+> dilakukan di aplikasi.
 
-Lalu jalankan aplikasinya:
+---
+
+## Menjalankan Aplikasi
 
 ```bash
 composer dev
 ```
 
-`composer dev` menjalankan server, queue worker, log viewer, dan Vite sekaligus.
+Menjalankan server, **queue worker**, log viewer, dan Vite sekaligus. Buka
+`http://localhost:8000`.
 
-### Menjalankan di Windows (bila `composer dev` gagal)
+### Windows (bila `composer dev` gagal)
 
-`composer dev` memakai `concurrently` yang kadang bermasalah di Windows. Alternatif:
-jalankan tiap proses di **terminal terpisah**.
-
-Paling sederhana — pakai aset hasil build (tanpa Vite):
+`composer dev` memakai `concurrently` yang kadang bermasalah di Windows. Jalankan tiap
+proses di **terminal terpisah** — paling sederhana pakai aset hasil build:
 
 ```bash
 npm run build
@@ -92,63 +134,122 @@ php artisan serve
 php artisan queue:work
 ```
 
-Buka `http://localhost:8000`. `queue:work` **wajib** berjalan agar notifikasi in-app
-muncul. Untuk pengembangan frontend dengan hot-reload, ganti `npm run build` dengan
-`npm run dev` di terminal tersendiri.
+**`queue:work` wajib berjalan** agar notifikasi in-app muncul. Untuk pengembangan frontend
+dengan hot-reload, ganti `npm run build` dengan `npm run dev`.
 
 ---
 
-## Perintah Kualitas Kode
+## Alur Request & Peran
 
-```bash
-composer check
+```
+Requester  →  Pimpinan User (L1)  →  PIC Stationery (L2)  →  Pimpinan SGA (L3)  →  PIC Gudang
+ buat &         setujui / tolak        tetapkan QTY ACTUAL      setujui / tolak      serah terima
+ ajukan        (atasan langsung)       + remark (kuantitatif)   (final)              → stok berkurang
 ```
 
-Menjalankan Pint (format), PHPStan level 6 (analisis statis), dan seluruh test.
+| # | Tahap | Pelaku | Aksi | Status setelahnya |
+|---|---|---|---|---|
+| 1 | Buat & ajukan | Requester | Pilih item + qty, submit | `Pending Approval Pimpinan` |
+| 2 | Approval L1 | **Pimpinan User** = atasan langsung (`users.manager_id`) | Setujui / Tolak + alasan | `Pending Approval PIC Stationery` / `Ditolak Pimpinan` |
+| 3 | Approval L2 | **PIC Stationery** | **Tetapkan qty per baris** (≤ diminta) + remark, atau tolak seluruhnya | `Pending Approval Pimpinan SGA` / `Ditolak PIC Stationery` |
+| 4 | Approval L3 | **Pimpinan SGA** (berbasis role, global) | Setujui / Tolak (qty read-only) | `Pengambilan Item` / `Ditolak Pimpinan SGA` |
+| 5 | Serah terima | **PIC Gudang** | Serahkan (boleh sebagian bila stok kurang) | `Selesai` (stok berkurang) |
 
-| Perintah | Fungsi |
+**Detail penting:**
+
+- **Approval L1 diarahkan ke atasan langsung** requester (`users.manager_id`), bukan role
+  global. Karena itu **setiap requester wajib punya atasan** (Pimpinan User). Requester tanpa
+  atasan **ditolak di depan** saat submit — bukan dibiarkan menggantung. Akun tanpa atasan
+  (mis. `admin`, VP) memang bukan aktor pengajuan request.
+- **Approval L2 bersifat kuantitatif** — PIC Stationery mengubah `quantity` per baris (hanya
+  boleh mengurangi), bukan sekadar memindahkan status.
+- **Reservasi (ADR-07).** Saat L2 menyetujui, stok **direservasi** (`reserved_quantity`
+  bertambah; `stock_quantity` tidak berubah) hingga barang diserahkan atau request
+  dibatalkan/ditolak SGA. Stok tersedia = `stock_quantity − reserved_quantity`.
+- **Tiga titik penolakan → tiga tujuan revisi:** ditolak Pimpinan User → **requester**
+  revisi; ditolak PIC Stationery → **final** (buat request baru); ditolak Pimpinan SGA →
+  **PIC Stationery** revisi.
+
+**Enam peran (RBAC):**
+
+| Peran | Kapabilitas inti |
 |---|---|
-| `composer lint` / `composer lint:fix` | Format PHP (Pint) |
-| `composer analyse` | Analisis statis (PHPStan level 6) |
-| `composer test:arch` | Uji batas modul saja |
-| `npm run types` | Cek tipe TypeScript |
-| `npm run lint` / `npm run format` | ESLint / Prettier |
+| `requester` | Role dasar semua pegawai — buat/ajukan/revisi/batalkan request miliknya |
+| `supervisor` (Pimpinan User) | Approval **L1** atas request bawahan langsung |
+| `pic_stationery` (PIC Stationery) | Approval **L2** kuantitatif, verifikasi pembelian, kelola master item |
+| `sga_manager` (Pimpinan SGA) | Approval **L3** final, lingkup global |
+| `warehouse_officer` (PIC Gudang) | Input pembelian, serah terima barang |
+| `administrator` | Kelola user/master, lihat audit; **bukan** aktor approval |
+
+**Alur pembelian:** PIC Gudang input pembelian → PIC Stationery verifikasi → stok
+**bertambah** (via ledger `IN`). Pembuat dokumen tidak boleh memverifikasi miliknya sendiri.
+
+---
+
+## Akun Demo
+
+Seeder demo (`DemoUserSeeder`, **hanya non-produksi**) membangun organisasi berjenjang
+menyerupai struktur nyata: 4 divisi → 14 departemen → 28 akun. Setiap staff beratasan
+Pimpinan seksinya; setiap Pimpinan beratasan VP divisinya — sehingga semua bisa mengajukan
+request. Kata sandi seragam: `password`.
+
+**Staff requester (untuk menguji pengajuan):**
+
+| Username | Nama | Seksi | Atasan (L1) |
+|---|---|---|---|
+| `mawan` | Mawan Irwansyah | SIT | `ms.sit` |
+| `budi` | Budi Santoso | General Affairs | `ms.ga` |
+| `dani` | Dani Ramadhan | Peleburan | `ms.red` |
+| `fitri` | Fitri Handayani | Pencetakan | `ms.cas` |
+| `wawan` | Wawan Setiawan | Keuangan | `ms.fin` |
+
+*(daftar lengkap staff & Pimpinan lain ada di `database/seeders/DemoUserSeeder.php`)*
+
+**Fungsi approval & khusus:**
+
+| Username | Peran |
+|---|---|
+| `ms.*` (10 Pimpinan seksi) | Approval **L1** untuk staf seksinya |
+| `pic.stationery` | Approval **L2** + verifikasi pembelian |
+| `vp.sga` | Approval **L3** (Pimpinan SGA) |
+| `pic.gudang` | Serah terima barang |
+| `admin` | Administrator (bukan aktor request) |
+
+**Contoh uji alur penuh:** `dani` (buat request) → `ms.red` (L1) → `pic.stationery` (L2) →
+`vp.sga` (L3) → `pic.gudang` (serah terima). L2/L3/gudang selalu akun yang sama; hanya L1
+mengikuti seksi requester.
 
 ---
 
 ## Struktur Modul
 
-Batas modul ada di `app/Modules/`. Setiap modul memuat route dan Policy-nya sendiri
-lewat `ServiceProvider` masing-masing; menambah modul cukup menambah satu baris di
+Batas modul ada di `app/Modules/`. Setiap modul memuat route dan Policy-nya sendiri lewat
+`ServiceProvider` masing-masing; menambah modul cukup menambah satu baris di
 `bootstrap/providers.php`.
 
 ```
 app/Modules/
-├── Identity/       user, role, permission, struktur organisasi
-├── Catalog/        item, kategori, UoM
-├── Requisition/    request + mesin status
+├── Identity/       user, departemen, RBAC, auth
+├── Catalog/        item, kategori, UoM, import CSV
+├── Inventory/      ledger stok, StockService, reservasi, snapshot  (satu-satunya penulis stok)
 ├── Approval/       engine approval generik (Request & Purchase)
-├── Fulfillment/    serah terima barang
-├── Purchasing/     dokumen pembelian + verifikasi
-├── Inventory/      ledger stok, saldo, reservasi
-├── Notification/   notifikasi in-app & email
-├── Reporting/      8 laporan + dashboard
-└── Audit/          jejak audit teknis
+├── Requisition/    request + workflow 10 status + approval 3 level
+├── Purchasing/     dokumen pembelian + verifikasi (4 status)
+├── Fulfillment/    serah terima barang + bukti cetak
+├── Reporting/      8 laporan + dashboard + export .xlsx/PDF  (hanya membaca)
+├── Notification/   notifikasi N1–N12 in-app & email, inbox
+└── Audit/          jejak audit teknis, halaman admin
 ```
 
 **Aturan yang ditegakkan otomatis** oleh `tests/Architecture/ModuleBoundaryTest.php`:
 
-1. `app/Shared` tidak boleh bergantung pada modul bisnis mana pun
-2. `Approval` tidak boleh mengenal `Requisition` maupun `Purchasing` secara konkret
-3. Seluruh berkas wajib `declare(strict_types=1)`
-4. Tidak boleh ada sisa `dd`/`dump`/`var_dump`
-5. Konvensi penamaan Controller & Service
+1. `app/Shared` tidak boleh bergantung pada modul bisnis mana pun.
+2. `Approval` tidak boleh mengenal `Requisition` maupun `Purchasing` secara konkret.
+3. `stock_quantity`/`reserved_quantity` **hanya** boleh ditulis dari modul `Inventory`.
+4. Seluruh berkas wajib `declare(strict_types=1)`; tanpa sisa `dd`/`dump`/`var_dump`.
+5. Controller berakhiran `Controller`, Service berakhiran `Service`.
 
 Pelanggaran menggagalkan CI, bukan menunggu ketahuan saat review.
-
-> **Aturan terpenting** — hanya modul `Inventory` yang boleh menulis stok. Sejak Fase 3
-> aturan ini ditegakkan otomatis: ledger tidak boleh dipakai di luar modulnya, dan
-> penulisan `stock_quantity`/`reserved_quantity` dari modul lain menggagalkan CI.
 
 ---
 
@@ -158,29 +259,24 @@ Pelanggaran menggagalkan CI, bukan menunggu ketahuan saat review.
 php artisan stock:reconcile
 ```
 
-Membandingkan `items.stock_quantity` terhadap ledger. Selisih berarti ada mutasi yang
+Membandingkan `items.stock_quantity` terhadap SUM ledger. Selisih berarti ada mutasi yang
 tidak melewati `StockService` — telusuri penyebabnya sebelum menjalankan `--fix`.
 
 ```bash
-php artisan stock:adjust 1709000002 50 --reason="Saldo Awal Migrasi"   # satu item
-php artisan stock:seed-initial --reason="Saldo Awal Migrasi"           # SEMUA item aktif → max_stock
+php artisan stock:adjust 1709000002 50 --reason="Stock opname"   # satu item
+php artisan stock:seed-initial --reason="Saldo awal"             # SEMUA item aktif → max_stock
 ```
 
-Menyesuaikan stok ke nilai tertentu. `stock:adjust` untuk satu item (stock opname/koreksi);
-`stock:seed-initial` mengisi **seluruh item aktif ke `max_stock`** sekaligus (pengisian saldo
-awal go-live), idempoten. **Saldo awal wajib masuk lewat perintah ini**, bukan `UPDATE`
-langsung — bila dilanggar, ledger tidak akan pernah rekonsiliasi dengan saldo. Jalankan
-`stock:reconcile` lalu `stock:snapshot --current` setelahnya.
+Saldo awal **wajib** masuk lewat perintah ini (transaksi `ADJUSTMENT`), bukan `UPDATE`
+langsung — bila dilanggar, ledger tidak akan pernah rekonsiliasi.
 
 ```bash
-php artisan stock:snapshot --backfill      # isi riwayat snapshot dari ledger (saat deploy)
-php artisan stock:snapshot --current       # segarkan snapshot bulan berjalan
-php artisan stock:snapshot --period=2026-07 # periode tertentu
+php artisan stock:snapshot --backfill        # isi riwayat snapshot dari ledger (saat deploy)
+php artisan stock:snapshot --current         # segarkan snapshot bulan berjalan
+php artisan stock:snapshot --period=2026-07  # periode tertentu
 ```
 
-Membangun snapshot saldo bulanan yang menjadi sumber laporan **Stock by Month/Year**
-(R1/R2). Dijadwalkan otomatis: bulanan (tanggal 1, untuk bulan yang baru selesai) plus
-refresh harian untuk bulan berjalan. Idempoten — aman dijalankan ulang.
+Snapshot saldo bulanan menjadi sumber laporan **Stock by Month/Year** (R1/R2). Idempoten.
 
 ---
 
@@ -199,91 +295,72 @@ Pengingat approval tertunda (N12) dijalankan scheduler; untuk mengirim manual:
 php artisan approvals:remind --days=2
 ```
 
-Di dev, `MAIL_MAILER=log` — email notifikasi ditulis ke `storage/logs`, bukan dikirim.
-Isi kredensial SMTP di `.env` untuk pengiriman sungguhan.
+Di dev, `MAIL_MAILER=log` — email ditulis ke `storage/logs`, bukan dikirim. Isi kredensial
+SMTP di `.env` untuk pengiriman sungguhan.
 
 ---
 
-## Catatan Menjalankan Test
+## Laporan & Dashboard
 
-Suite lengkap (229 test) melampaui `memory_limit` default 128M. Jalankan dengan limit
-lebih besar:
+Modul `Reporting` **hanya membaca** (tidak pernah menulis ledger). Tersedia 8 laporan:
+
+- **Stock by Month / Year** (R1–R2) — kartu/mutasi stok per periode (dari snapshot).
+- **Purchasing** (R3) — rekap pembelian per periode.
+- **Need to Buy** — item dengan `stock_quantity < min_stock`.
+- **Request by Month / Year / Account / Item** (R4–R7) — rekap request; "Account" = Departemen/Seksi.
+
+Setiap laporan dapat **diekspor ke .xlsx** dan dicetak PDF. Dashboard menampilkan statistik
+ringkas; Pimpinan User dibatasi lingkup departemennya.
+
+---
+
+## Pengujian & Kualitas Kode
+
+Test memakai **MySQL** (database `taajri_stationery_test`), bukan SQLite — SQLite tidak
+menegakkan `CHECK`, tidak punya `SELECT ... FOR UPDATE` nyata, sehingga uji integritas
+berisiko lulus palsu. Suite lengkap melampaui `memory_limit` 128M default:
 
 ```bash
 php -d memory_limit=512M vendor/pestphp/pest/bin/pest
 ```
 
----
-
-## Pengembangan Selanjutnya & Troubleshooting
-
-Sistem sudah fungsional dan teruji (**230 test hijau**). Bagian ini merangkum jebakan yang
-sudah ditemukan saat UAT beserta perbaikannya — catat temuan baru di sini agar sesi
-berikutnya (termasuk di window/mesin lain) cepat menindaklanjuti.
-
-### ⚠️ Request mandek di "Pending Approval Pimpinan" / approver tidak bisa menyetujui — SUDAH DIPERBAIKI
-
-**Akar masalah.** Approval **Level 1** diarahkan ke **atasan langsung** requester
-(`users.manager_id`), bukan ke role global — lihat
-[`RequestPolicy::approveL1`](app/Modules/Requisition/Policies/RequestPolicy.php) +
-`User::isDirectManagerOf()`. Bila sebuah request dibuat oleh akun **tanpa `manager_id`**
-(mis. akun `admin` pada seeder demo), **tidak ada satu pun user** yang memenuhi syarat
-approver L1 → request menggantung permanen di `PENDING_SUPERVISOR`, dan approver mana pun
-(termasuk `vp.sga`) tidak melihat tombol Setujui/Tolak. Inilah kasus **REQ004** (requester
-"Administrator Sistem", `manager_id = NULL`).
-
-**Perbaikan yang diterapkan.**
-[`RequestService::submit()`](app/Modules/Requisition/Services/RequestService.php) kini
-**menolak pengajuan** bila requester belum punya atasan, dengan pesan yang jelas, dan
-`RequestController::store()` membungkus create+submit dalam satu transaksi agar tidak
-menyisakan draft menggantung (diuji di `RequestWorkflowTest`). Jadi request "yatim"
-semacam REQ004 tidak akan terbentuk lagi.
-
-**Untuk data/UAT.** Pastikan **setiap requester punya `manager_id`** (di produksi berasal
-dari impor HR); akun `admin` sebaiknya **tidak** dipakai mengajukan request. Uji alur
-lengkap memakai `mawan` (atasannya `ms.sit`):
-`mawan` → `ms.sit` (L1) → `pic.stationery` (L2) → `vp.sga` (L3) → `pic.gudang` (serah
-terima). Password semua akun demo: `password`.
-
-### Tombol Approve/Reject tidak muncul di layar Verify (L1/L2/L3)
-
-Tombol digerbangi prop `canDecide` = `Gate::can('approveL{1,2,3}', $request)`. Bila untuk
-request yang **valid** (requester punya atasan, status benar, akun & level tepat) tombol
-tetap tidak muncul, periksa berurutan di lingkungan Anda:
-
-1. **Level & akun sudah tepat?** "Pending Approval Pimpinan" = L1 (atasan langsung),
-   "Pending Approval PIC Stationery" = L2 (`pic.stationery`), "Pending Approval Pimpinan
-   SGA" = L3 (`vp.sga`). Approver level lain memang tidak melihat tombol.
-2. **Cache permission spatie basi** (sering setelah seed/ubah role):
-   ```bash
-   php artisan permission:cache-reset
-   php artisan optimize:clear
-   ```
-3. **Aset frontend basi** — karena `composer dev`/Vite tidak berjalan di Windows, browser
-   memuat build lama. Bangun ulang lalu _hard refresh_ (Ctrl+Shift+R):
-   ```bash
-   npm run build
-   ```
-4. **Akun belum ter-seed permission-nya.** Verifikasi cepat (contoh L2):
-   ```bash
-   php artisan tinker --execute="echo App\Modules\Identity\Models\User::where('username','pic.stationery')->first()?->can('request.approve.l2') ? 'YES' : 'NO';"
-   ```
-   Bila `NO`, seed ulang lalu reset cache:
-   ```bash
-   php artisan db:seed --class="Database\Seeders\RolePermissionSeeder"
-   php artisan permission:cache-reset
-   ```
-
-> Selama UAT, verifikasi juga penerbitan PO dan penerimaan barang dengan pola diagnosis
-> yang sama (`canDecide` → level → permission → status → cache → build).
-
-### Reminder dev di Windows
-
-`composer dev` (via `concurrently`) sering gagal di Windows. Jalankan tiap proses di
-terminal terpisah:
+Definition of Done sebelum menyatakan selesai:
 
 ```bash
-npm run build
-php artisan serve
-php artisan queue:work
+vendor/bin/pint --test                       # format PHP
+vendor/bin/phpstan analyse --memory-limit=1G # analisis statis level 6
+php -d memory_limit=512M vendor/pestphp/pest/bin/pest
+npm run types && npm run lint && npm run format:check && npm run build
+php artisan stock:reconcile                  # SUM(ledger) == stock_quantity
 ```
+
+Pintasan Composer:
+
+| Perintah | Fungsi |
+|---|---|
+| `composer check` | Pint + PHPStan + seluruh test |
+| `composer lint` / `composer lint:fix` | Format PHP (Pint) |
+| `composer analyse` | Analisis statis (PHPStan level 6) |
+| `composer test:arch` | Uji batas modul saja |
+
+---
+
+## Troubleshooting
+
+**Request tidak dapat diajukan — "belum memiliki atasan".** Approval L1 diarahkan ke atasan
+langsung (`users.manager_id`). Requester tanpa atasan tidak punya tujuan approval, jadi
+pengajuannya ditolak. Pastikan requester punya `manager_id` (di produksi dari impor HR);
+untuk uji, gunakan akun staff pada tabel [Akun Demo](#akun-demo), bukan `admin`.
+
+**Tombol Setujui/Tolak tidak muncul di layar Verify.** Tombol digerbangi
+`Gate::can('approveL{1,2,3}', $request)`. Periksa berurutan: (1) level & akun sudah tepat
+(L1 = atasan langsung, L2 = `pic.stationery`, L3 = `vp.sga`); (2) reset cache permission
+`php artisan permission:cache-reset && php artisan optimize:clear`; (3) aset frontend basi —
+`npm run build` lalu hard refresh (Ctrl+Shift+R).
+
+**MySQL tidak menegakkan CHECK.** Bila data yang seharusnya ditolak justru tersimpan
+(mis. penolakan tanpa alasan, `quantity_approved > quantity_requested`), server Anda
+< 8.0.16 atau MariaDB — perbaiki server dulu, jangan lanjut.
+
+**Windows.** `composer dev` sering gagal — jalankan `npm run build`, `php artisan serve`,
+dan `php artisan queue:work` di terminal terpisah.

@@ -28,16 +28,17 @@
         <env name="CACHE_STORE" value="array"/>
 
         <!--
-            PostgreSQL, BUKAN SQLite.
+            MySQL 8.0.16+, BUKAN SQLite.
 
-            Skema bergantung pada partial index, jsonb, inet, pg_trgm, dan
-            SELECT ... FOR UPDATE. SQLite juga mengabaikan sebagian CHECK
-            constraint, sehingga uji integritas T1-T11 (§9 Database Schema)
-            berisiko LULUS PALSU. Lihat docs/development-setup.md §4.
+            Seluruh "jaring pengaman database" bergantung pada CHECK constraint
+            yang DITEGAKKAN. MySQL < 8.0.16 dan MariaDB mem-parse tapi MENGABAIKAN
+            CHECK, dan SQLite tak punya partial index / SELECT ... FOR UPDATE nyata
+            / JSON penuh — semuanya membuat uji integritas T4, T5, T11 (§9 Database
+            Schema) LULUS PALSU. Buat database test-nya lebih dulu di server MySQL.
         -->
-        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="5432"/>
+        <env name="DB_PORT" value="3306"/>
         <env name="DB_DATABASE" value="taajri_stationery_test"/>
         <env name="DB_URL" value=""/>
 

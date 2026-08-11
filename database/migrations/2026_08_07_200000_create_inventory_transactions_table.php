@@ -75,7 +75,7 @@ return new class extends Migration
         DB::statement(
             "ALTER TABLE inventory_transactions ADD CONSTRAINT chk_it_adjustment_needs_reason
              CHECK (transaction_type <> 'ADJUSTMENT'
-                    OR (adjustment_reason IS NOT NULL AND length(trim(adjustment_reason)) > 0))"
+                    OR (adjustment_reason IS NOT NULL AND CHAR_LENGTH(TRIM(adjustment_reason)) > 0))"
         );
     }
 

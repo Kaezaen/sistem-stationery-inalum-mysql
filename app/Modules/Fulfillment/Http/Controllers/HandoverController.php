@@ -41,7 +41,7 @@ class HandoverController extends Controller
             ->withStatus($tab === 'completed' ? RequestStatus::Completed : RequestStatus::ReadyForHandover)
             ->when($httpRequest->string('search')->toString() !== '', function ($q) use ($httpRequest): void {
                 $term = '%'.$httpRequest->string('search')->toString().'%';
-                $q->where('request_number', 'ilike', $term);
+                $q->where('request_number', 'like', $term);
             })
             ->orderBy('request_date')
             ->orderBy('id')

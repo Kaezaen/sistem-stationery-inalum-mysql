@@ -30,8 +30,11 @@ return new class extends Migration
             $table->timestampsTz();
         });
 
+        // PostgreSQL memakai indeks parsial (WHERE read_at IS NULL). MySQL tak
+        // mendukungnya; indeks biasa (notifiable_id, read_at) tetap mempercepat
+        // penghitungan lencana "belum dibaca" (filter read_at IS NULL per user).
         DB::statement(
-            'CREATE INDEX idx_notif_unread ON notifications (notifiable_id) WHERE read_at IS NULL'
+            'CREATE INDEX idx_notif_unread ON notifications (notifiable_id, read_at)'
         );
     }
 

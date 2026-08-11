@@ -33,8 +33,8 @@ use Illuminate\Support\Facades\DB;
  * menjalankan ulang bulan yang sama hanya memperbarui angkanya.
  *
  * Agregat dibaca lewat DB::table, bukan model Eloquent: query set-based dengan
- * kolom alias (total_in, dst) dan DISTINCT ON adalah bentuk yang paling tepat
- * dikerjakan query builder, dan menghindari properti model tak terdefinisi.
+ * kolom alias (total_in, dst) dan window function (ROW_NUMBER) adalah bentuk yang
+ * paling tepat dikerjakan query builder, dan menghindari properti model tak terdefinisi.
  */
 class StockSnapshotService
 {
@@ -155,23 +155,28 @@ class StockSnapshotService
     /**
      * Saldo (quantity_after transaksi terakhir) tiap item TEPAT SEBELUM $moment.
      *
-     * DISTINCT ON (PostgreSQL) mengambil satu baris terbaru per item dalam sekali
-     * query, apa pun jumlah itemnya — jauh lebih murah daripada satu query per item.
-     * transaction_date lalu id sebagai pengurut memastikan baris "terakhir" tepat
-     * meski beberapa transaksi berbagi timestamp yang sama.
+     * PostgreSQL memakai DISTINCT ON untuk mengambil satu baris terbaru per item
+     * dalam sekali query. MySQL tidak punya DISTINCT ON — dan query builder
+     * ->distinct('item_id') di MySQL menjadi SELECT DISTINCT atas SEMUA kolom
+     * (item_id, quantity_after), yang salah secara diam-diam. Padanan MySQL 8
+     * yang benar: window ROW_NUMBER() memberi nomor urut per item (transaksi
+     * terbaru = 1), lalu ambil baris bernomor 1. transaction_date lalu id sebagai
+     * pengurut memastikan baris "terakhir" tepat meski beberapa transaksi berbagi
+     * timestamp yang sama.
      *
      * @return array<int, int> item_id => saldo
      */
     private function balancesAsOf(CarbonImmutable $moment): array
     {
-        $rows = DB::table(self::LEDGER)
+        $ranked = DB::table(self::LEDGER)
             ->select('item_id', 'quantity_after')
-            ->where('transaction_date', '<', $moment)
-            ->orderBy('item_id')
-            ->orderByDesc('transaction_date')
-            ->orderByDesc('id')
-            ->distinct('item_id')
-            ->get();
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY transaction_date DESC, id DESC) AS rn')
+            ->where('transaction_date', '<', $moment);
+
+        $rows = DB::query()
+            ->fromSub($ranked, 'ranked')
+            ->where('rn', 1)
+            ->get(['item_id', 'quantity_after']);
 
         /** @var array<int, int> $balances */
         $balances = [];
@@ -192,9 +197,11 @@ class StockSnapshotService
     {
         $rows = DB::table(self::LEDGER)
             ->select('item_id')
-            ->selectRaw('COALESCE(SUM(quantity) FILTER (WHERE transaction_type = ?), 0) AS total_in', [TransactionType::In->value])
-            ->selectRaw('COALESCE(SUM(quantity) FILTER (WHERE transaction_type = ?), 0) AS total_out', [TransactionType::Out->value])
-            ->selectRaw('COALESCE(SUM(quantity_after - quantity_before) FILTER (WHERE transaction_type = ?), 0) AS total_adjustment', [TransactionType::Adjustment->value])
+            // MySQL tidak punya agregat "FILTER (WHERE ...)" seperti PostgreSQL.
+            // Padanannya: SUM(CASE WHEN ... THEN nilai ELSE 0 END).
+            ->selectRaw('COALESCE(SUM(CASE WHEN transaction_type = ? THEN quantity ELSE 0 END), 0) AS total_in', [TransactionType::In->value])
+            ->selectRaw('COALESCE(SUM(CASE WHEN transaction_type = ? THEN quantity ELSE 0 END), 0) AS total_out', [TransactionType::Out->value])
+            ->selectRaw('COALESCE(SUM(CASE WHEN transaction_type = ? THEN quantity_after - quantity_before ELSE 0 END), 0) AS total_adjustment', [TransactionType::Adjustment->value])
             ->where('transaction_date', '>=', $start)
             ->where('transaction_date', '<', $next)
             ->groupBy('item_id')

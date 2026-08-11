@@ -49,8 +49,8 @@ class PurchaseVerificationController extends Controller
             ->when($request->string('search')->toString() !== '', function ($q) use ($request): void {
                 $term = '%'.$request->string('search')->toString().'%';
                 $q->where(function ($sub) use ($term): void {
-                    $sub->where('purchase_number', 'ilike', $term)
-                        ->orWhere('supplier_name', 'ilike', $term);
+                    $sub->where('purchase_number', 'like', $term)
+                        ->orWhere('supplier_name', 'like', $term);
                 });
             })
             ->orderByDesc('purchase_date')

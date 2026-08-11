@@ -61,12 +61,16 @@ return new class extends Migration
         DB::statement(
             "ALTER TABLE approvals ADD CONSTRAINT chk_approvals_rejection_reason
              CHECK (status <> 'REJECTED'
-                    OR (rejection_notes IS NOT NULL AND length(trim(rejection_notes)) > 0))"
+                    OR (rejection_notes IS NOT NULL AND CHAR_LENGTH(TRIM(rejection_notes)) > 0))"
         );
 
+        // PostgreSQL memakai indeks parsial (WHERE is_superseded = false) untuk
+        // pencarian approval aktif. MySQL tak punya indeks parsial; menyertakan
+        // is_superseded sebagai kolom indeks membuat pencarian approval aktif
+        // (approvable + is_superseded = false) tetap terlayani, sekaligus tidak
+        // menduplikasi indeks (approvable_type, approvable_id) yang sudah ada.
         DB::statement(
-            'CREATE INDEX idx_approvals_active ON approvals (approvable_type, approvable_id)
-             WHERE is_superseded = false'
+            'CREATE INDEX idx_approvals_active ON approvals (approvable_type, approvable_id, is_superseded)'
         );
     }
 

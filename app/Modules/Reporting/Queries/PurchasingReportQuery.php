@@ -37,10 +37,10 @@ class PurchasingReportQuery
                 $like = '%'.$filters->search.'%';
 
                 return $q->where(function (Builder $sub) use ($like): void {
-                    $sub->where('i.item_name', 'ilike', $like)
-                        ->orWhere('i.item_code', 'ilike', $like)
-                        ->orWhere('p.supplier_name', 'ilike', $like)
-                        ->orWhere('p.purchase_number', 'ilike', $like);
+                    $sub->where('i.item_name', 'like', $like)
+                        ->orWhere('i.item_code', 'like', $like)
+                        ->orWhere('p.supplier_name', 'like', $like)
+                        ->orWhere('p.purchase_number', 'like', $like);
                 });
             })
             ->orderByDesc('p.purchase_date')

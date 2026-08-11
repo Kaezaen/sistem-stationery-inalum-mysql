@@ -52,14 +52,29 @@ return new class extends Migration
          * Tanpa ini, revisi berulang pada request yang sama akan menumpuk
          * reservasi ganda atas stok yang sama — stok terlihat habis padahal
          * hanya satu request yang benar-benar menahannya.
+         *
+         * MySQL tidak mendukung UNIQUE index parsial (CREATE UNIQUE INDEX ... WHERE).
+         * Padanannya (spec §10.3b): kolom generated yang bernilai request_item_id
+         * HANYA saat status = 'HELD', selain itu NULL. Karena beberapa NULL tidak
+         * dianggap bertabrakan di UNIQUE index, constraint ini hanya menegakkan
+         * keunikan pada reservasi yang benar-benar aktif — identik secara fungsional
+         * dengan partial index PostgreSQL.
+         *
+         * VIRTUAL, bukan STORED: request_item_id menerima foreign key ON DELETE
+         * CASCADE (migration Fase 5). MySQL MENOLAK FK dengan aksi CASCADE/SET NULL
+         * pada kolom yang menjadi basis kolom generated STORED (error 1215). Kolom
+         * VIRTUAL bebas dari batasan itu dan tetap bisa diberi UNIQUE index (InnoDB).
          */
         DB::statement(
-            "CREATE UNIQUE INDEX uq_sr_active ON stock_reservations (request_item_id)
-             WHERE status = 'HELD' AND request_item_id IS NOT NULL"
+            "ALTER TABLE stock_reservations
+             ADD COLUMN active_key BIGINT UNSIGNED
+             GENERATED ALWAYS AS (CASE WHEN status = 'HELD' THEN request_item_id ELSE NULL END) VIRTUAL"
         );
+        DB::statement('ALTER TABLE stock_reservations ADD CONSTRAINT uq_sr_active UNIQUE (active_key)');
 
-        DB::statement("CREATE INDEX idx_sr_item ON stock_reservations (item_id) WHERE status = 'HELD'");
-        DB::statement("CREATE INDEX idx_sr_expires ON stock_reservations (expires_at) WHERE status = 'HELD'");
+        // Indeks parsial PostgreSQL (WHERE status = 'HELD') → indeks biasa di MySQL.
+        DB::statement('CREATE INDEX idx_sr_item ON stock_reservations (item_id)');
+        DB::statement('CREATE INDEX idx_sr_expires ON stock_reservations (expires_at)');
     }
 
     public function down(): void

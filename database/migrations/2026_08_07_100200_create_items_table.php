@@ -18,10 +18,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Diperlukan indeks GIN trigram untuk pencarian ILIKE '%kata%' pada
-        // layar Search Items (wireframe 3.9.3).
-        DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-
         Schema::create('items', function (Blueprint $table): void {
             $table->id();
             $table->string('item_code', 30)->unique();
@@ -42,6 +38,17 @@ return new class extends Migration
 
             $table->index('category_id');
             $table->index('uom_id');
+
+            // Pencarian nama/kode item memakai LIKE '%kata%'. MySQL tidak punya
+            // pg_trgm; katalog < 5.000 baris sehingga table scan sudah memadai.
+            // (Opsional bila kelak perlu: FULLTEXT(item_name, item_code) — semantik
+            // berbasis kata, bukan substring; sengaja tidak dipasang di Fase ini.)
+
+            // Laporan "Need to Buy" (R8). MySQL tidak mendukung indeks parsial, dan
+            // predikat "stock_quantity < min_stock" (perbandingan antar-kolom) tak
+            // dapat diindeks. Indeks biasa pada kolom filter tetap membantu
+            // menyaring baris aktif; sisanya diselesaikan saat scan.
+            $table->index(['is_active', 'stock_quantity', 'min_stock'], 'idx_items_need_to_buy');
         });
 
         /*
@@ -55,16 +62,6 @@ return new class extends Migration
         DB::statement('ALTER TABLE items ADD CONSTRAINT chk_items_reserved_non_negative CHECK (reserved_quantity >= 0)');
         DB::statement('ALTER TABLE items ADD CONSTRAINT chk_items_reserved_le_stock CHECK (reserved_quantity <= stock_quantity)');
         DB::statement('ALTER TABLE items ADD CONSTRAINT chk_items_min_le_max CHECK (min_stock <= max_stock)');
-
-        // Pencarian nama/kode item — btree unique tidak membantu pola '%kata%'.
-        DB::statement('CREATE INDEX idx_items_name_trgm ON items USING gin (item_name gin_trgm_ops)');
-        DB::statement('CREATE INDEX idx_items_code_trgm ON items USING gin (item_code gin_trgm_ops)');
-
-        // Laporan "Need to Buy" (R8) — indeks parsial, hanya baris yang relevan.
-        DB::statement(
-            'CREATE INDEX idx_items_need_to_buy ON items (id)
-             WHERE deleted_at IS NULL AND is_active AND stock_quantity < min_stock'
-        );
     }
 
     public function down(): void

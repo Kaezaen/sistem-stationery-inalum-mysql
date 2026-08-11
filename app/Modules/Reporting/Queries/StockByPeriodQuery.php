@@ -86,8 +86,11 @@ class StockByPeriodQuery
     public function byYear(ReportFilters $filters): ReportResult
     {
         // opening = saldo awal bulan paling awal; closing = saldo akhir bulan
-        // paling akhir dalam tahun itu. array_agg + ORDER BY mengambil keduanya
-        // dalam satu query tanpa subquery berkorelasi.
+        // paling akhir dalam tahun itu. MySQL tak punya array_agg PostgreSQL;
+        // padanannya SUBSTRING_INDEX(GROUP_CONCAT(... ORDER BY ...), ',', 1):
+        // GROUP_CONCAT mengurutkan nilai per bulan, SUBSTRING_INDEX mengambil yang
+        // pertama. Dengan maksimal 12 bulan per item, string hasil jauh di bawah
+        // batas group_concat_max_len sehingga tidak akan terpotong.
         $rows = $this->baseItemJoin()
             ->where('sms.period_year', $filters->year)
             ->when($filters->categoryId, fn (Builder $q): Builder => $q->where('i.category_id', $filters->categoryId))
@@ -98,11 +101,11 @@ class StockByPeriodQuery
                 'i.item_code',
                 'i.item_name',
                 'c.name as category',
-                DB::raw('(array_agg(sms.opening_balance ORDER BY sms.period_month ASC))[1] as opening_balance'),
+                DB::raw("CAST(SUBSTRING_INDEX(GROUP_CONCAT(sms.opening_balance ORDER BY sms.period_month ASC), ',', 1) AS SIGNED) as opening_balance"),
                 DB::raw('SUM(sms.total_in) as total_in'),
                 DB::raw('SUM(sms.total_out) as total_out'),
                 DB::raw('SUM(sms.total_adjustment) as total_adjustment'),
-                DB::raw('(array_agg(sms.closing_balance ORDER BY sms.period_month DESC))[1] as closing_balance'),
+                DB::raw("CAST(SUBSTRING_INDEX(GROUP_CONCAT(sms.closing_balance ORDER BY sms.period_month DESC), ',', 1) AS SIGNED) as closing_balance"),
             ]);
 
         $mapped = $rows->map(fn (object $r): array => [
@@ -140,8 +143,8 @@ class StockByPeriodQuery
         $like = '%'.$term.'%';
 
         return $query->where(function (Builder $sub) use ($like): void {
-            $sub->where('i.item_name', 'ilike', $like)
-                ->orWhere('i.item_code', 'ilike', $like);
+            $sub->where('i.item_name', 'like', $like)
+                ->orWhere('i.item_code', 'like', $like);
         });
     }
 

@@ -138,8 +138,8 @@ class Item extends Model
         $pattern = '%'.$term.'%';
 
         $query->where(function (Builder $sub) use ($pattern): void {
-            $sub->where('item_name', 'ilike', $pattern)
-                ->orWhere('item_code', 'ilike', $pattern);
+            $sub->where('item_name', 'like', $pattern)
+                ->orWhere('item_code', 'like', $pattern);
         });
     }
 

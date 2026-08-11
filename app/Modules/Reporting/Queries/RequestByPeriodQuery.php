@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * R4 Request by Month & R5 Request by Year — pivot periode × status.
  *
  * Berbasis request_date (kolom date, bukan created_at — §10.1), sehingga tidak
- * terpengaruh zona waktu sesi PostgreSQL. Tiap sel berisi jumlah request pada
+ * terpengaruh zona waktu sesi database. Tiap sel berisi jumlah request pada
  * periode itu untuk status tertentu; kolom Total menutup baris.
  *
  * $departmentIds membatasi lingkup: Pimpinan User hanya melihat requestor
@@ -32,11 +32,11 @@ class RequestByPeriodQuery
     public function byMonth(ReportFilters $filters, ?array $departmentIds = null): ReportResult
     {
         $counts = $this->baseCounts($departmentIds)
-            ->whereRaw('EXTRACT(YEAR FROM request_date) = ?', [$filters->year])
-            ->selectRaw('EXTRACT(MONTH FROM request_date)::int as bucket')
+            ->whereRaw('YEAR(request_date) = ?', [$filters->year])
+            ->selectRaw('MONTH(request_date) as bucket')
             ->addSelect('status')
             ->selectRaw('COUNT(*) as total')
-            ->groupByRaw('EXTRACT(MONTH FROM request_date), status')
+            ->groupByRaw('MONTH(request_date), status')
             ->get();
 
         // Baris rapat: seluruh 12 bulan tampil meski nol, agar terbaca sebagai kalender.
@@ -65,10 +65,10 @@ class RequestByPeriodQuery
     public function byYear(ReportFilters $filters, ?array $departmentIds = null): ReportResult
     {
         $counts = $this->baseCounts($departmentIds)
-            ->selectRaw('EXTRACT(YEAR FROM request_date)::int as bucket')
+            ->selectRaw('YEAR(request_date) as bucket')
             ->addSelect('status')
             ->selectRaw('COUNT(*) as total')
-            ->groupByRaw('EXTRACT(YEAR FROM request_date), status')
+            ->groupByRaw('YEAR(request_date), status')
             ->get();
 
         /** @var array<int, array<string, mixed>> $rows */

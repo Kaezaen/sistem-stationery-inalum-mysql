@@ -35,9 +35,16 @@ uses(DatabaseTruncation::class);
  * eksplisit di sini.
  */
 afterEach(function (): void {
-    DB::statement(
-        'TRUNCATE items, users, uoms, categories, departments RESTART IDENTITY CASCADE'
-    );
+    // MySQL tak punya "TRUNCATE ... RESTART IDENTITY CASCADE" (sintaks PostgreSQL)
+    // dan menolak TRUNCATE atas tabel yang direferensikan FK. Matikan pengecekan
+    // FK sesaat, lalu TRUNCATE tiap tabel (sekaligus mereset AUTO_INCREMENT).
+    DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+    foreach (['items', 'users', 'uoms', 'categories', 'departments'] as $table) {
+        DB::table($table)->truncate();
+    }
+
+    DB::statement('SET FOREIGN_KEY_CHECKS=1');
 });
 
 it('menahan koneksi lain yang mencoba mengunci baris yang sama', function (): void {
@@ -46,7 +53,7 @@ it('menahan koneksi lain yang mencoba mengunci baris yang sama', function (): vo
 
     // Koneksi kedua ke database yang sama. Didaftarkan saat runtime agar
     // kebutuhan khusus pengujian ini tidak mengotori config aplikasi.
-    config()->set('database.connections.probe', config('database.connections.pgsql'));
+    config()->set('database.connections.probe', config('database.connections.mysql'));
 
     $probe = DB::connection('probe');
 
@@ -56,10 +63,10 @@ it('menahan koneksi lain yang mencoba mengunci baris yang sama', function (): vo
         // Koneksi utama mengunci baris dan MENAHANNYA.
         DB::table('items')->where('id', $item->id)->lockForUpdate()->first();
 
-        // Tanpa lock_timeout, koneksi kedua akan menunggu selamanya dan test
-        // menggantung alih-alih gagal. Batas waktu mengubahnya menjadi error
-        // yang dapat diperiksa.
-        $probe->statement("SET lock_timeout = '500ms'");
+        // Tanpa batas lock wait, koneksi kedua akan menunggu selamanya dan test
+        // menggantung alih-alih gagal. innodb_lock_wait_timeout (detik, minimum 1)
+        // mengubahnya menjadi error 1205 yang dapat diperiksa.
+        $probe->statement('SET SESSION innodb_lock_wait_timeout = 1');
         $probe->beginTransaction();
 
         $blocked = false;
@@ -69,8 +76,9 @@ it('menahan koneksi lain yang mencoba mengunci baris yang sama', function (): vo
             $probe->table('items')->where('id', $item->id)->lockForUpdate()->first();
         } catch (Throwable $e) {
             $message = strtolower($e->getMessage());
-            $blocked = str_contains($message, 'lock timeout')
-                || str_contains($message, 'canceling statement');
+            // MySQL 1205: "Lock wait timeout exceeded; try restarting transaction".
+            $blocked = str_contains($message, 'lock wait timeout')
+                || str_contains($message, 'lock timeout');
         } finally {
             $probe->rollBack();
         }
@@ -98,7 +106,7 @@ it('membiarkan koneksi lain mengunci baris yang berbeda', function (): void {
     $itemA = Item::factory()->withStock(5)->create();
     $itemB = Item::factory()->withStock(5)->create();
 
-    config()->set('database.connections.probe', config('database.connections.pgsql'));
+    config()->set('database.connections.probe', config('database.connections.mysql'));
     $probe = DB::connection('probe');
 
     DB::beginTransaction();
@@ -106,7 +114,7 @@ it('membiarkan koneksi lain mengunci baris yang berbeda', function (): void {
     try {
         DB::table('items')->where('id', $itemA->id)->lockForUpdate()->first();
 
-        $probe->statement("SET lock_timeout = '500ms'");
+        $probe->statement('SET SESSION innodb_lock_wait_timeout = 1');
         $probe->beginTransaction();
 
         $lockedOther = false;

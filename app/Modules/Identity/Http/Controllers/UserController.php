@@ -34,10 +34,10 @@ class UserController extends Controller
                 function ($q) use ($request): void {
                     $term = '%'.$request->string('search')->toString().'%';
                     $q->where(function ($sub) use ($term): void {
-                        $sub->where('name', 'ilike', $term)
-                            ->orWhere('employee_id', 'ilike', $term)
-                            ->orWhere('username', 'ilike', $term)
-                            ->orWhere('email', 'ilike', $term);
+                        $sub->where('name', 'like', $term)
+                            ->orWhere('employee_id', 'like', $term)
+                            ->orWhere('username', 'like', $term)
+                            ->orWhere('email', 'like', $term);
                     });
                 },
             )

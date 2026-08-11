@@ -45,8 +45,36 @@ return new class extends Migration
 
         // Mencegah user menjadi atasan dirinya sendiri — approval L1 pada request
         // miliknya tidak akan pernah bisa diputuskan orang lain. Siklus yang lebih
-        // panjang (A->B->A) tidak dapat dicegah CHECK dan divalidasi UserService.
-        DB::statement('ALTER TABLE users ADD CONSTRAINT chk_users_not_own_manager CHECK (manager_id IS DISTINCT FROM id)');
+        // panjang (A->B->A) tidak dapat dicegah di sini dan divalidasi UserService.
+        //
+        // PostgreSQL memakai CHECK (manager_id IS DISTINCT FROM id). MySQL MENOLAK
+        // CHECK yang mereferensikan kolom AUTO_INCREMENT (error 3818: "Check
+        // constraint cannot refer to an auto-increment column"). Karena itu aturan
+        // ditegakkan lewat trigger BEFORE INSERT/UPDATE — tetap jaring pengaman di
+        // level database, sadar-NULL (user tanpa atasan tetap lolos).
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER trg_users_not_own_manager_insert
+            BEFORE INSERT ON users
+            FOR EACH ROW
+            BEGIN
+                IF NEW.manager_id IS NOT NULL AND NEW.manager_id = NEW.id THEN
+                    SIGNAL SQLSTATE '45000'
+                        SET MESSAGE_TEXT = 'User tidak boleh menjadi atasan dirinya sendiri';
+                END IF;
+            END
+            SQL);
+
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER trg_users_not_own_manager_update
+            BEFORE UPDATE ON users
+            FOR EACH ROW
+            BEGIN
+                IF NEW.manager_id IS NOT NULL AND NEW.manager_id = NEW.id THEN
+                    SIGNAL SQLSTATE '45000'
+                        SET MESSAGE_TEXT = 'User tidak boleh menjadi atasan dirinya sendiri';
+                END IF;
+            END
+            SQL);
 
         Schema::create('password_reset_tokens', function (Blueprint $table): void {
             $table->string('email')->primary();

@@ -57,6 +57,10 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // Paksa sesi ke UTC (spec §10.7). Menghilangkan sumber bug pergeseran
+            // batas bulan pada snapshot: timestamp disimpan UTC, konversi tampilan
+            // ke Asia/Jakarta dilakukan di aplikasi — bukan di sesi database.
+            'timezone' => '+00:00',
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,

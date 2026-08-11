@@ -26,3 +26,6 @@ Thumbs.db
 # Konfigurasi tooling/editor lokal (tidak disertakan di repo)
 /.claude
 /CLAUDE.md
+
+# Dokumen internal — tidak disertakan di repo publik
+/docs

@@ -40,8 +40,8 @@ class RequestByItemQuery
                 $like = '%'.$filters->search.'%';
 
                 return $q->where(function (Builder $sub) use ($like): void {
-                    $sub->where('i.item_name', 'ilike', $like)
-                        ->orWhere('i.item_code', 'ilike', $like);
+                    $sub->where('i.item_name', 'like', $like)
+                        ->orWhere('i.item_code', 'like', $like);
                 });
             })
             ->groupBy('i.id', 'i.item_code', 'i.item_name', 'c.name')

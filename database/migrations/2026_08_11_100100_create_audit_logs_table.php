@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -31,6 +30,9 @@ return new class extends Migration
             $table->string('event', 50); // created | updated | deleted | login | login_failed | ...
             $table->jsonb('old_values')->nullable();
             $table->jsonb('new_values')->nullable();
+            // PostgreSQL memakai tipe inet; MySQL memetakan ipAddress() ke
+            // VARCHAR(45) (spec §10.2). Validasi format IP dilakukan di aplikasi.
+            $table->ipAddress('ip_address')->nullable();
             $table->text('user_agent')->nullable();
             $table->timestampTz('created_at')->useCurrent();
 
@@ -38,10 +40,6 @@ return new class extends Migration
             $table->index('user_id', 'idx_audit_user');
             $table->index('created_at', 'idx_audit_created');
         });
-
-        // ip_address memakai tipe inet PostgreSQL (validasi format IP di database).
-        // Ditambahkan lewat statement karena Schema builder tidak memetakan inet.
-        DB::statement('ALTER TABLE audit_logs ADD COLUMN ip_address inet');
     }
 
     public function down(): void
