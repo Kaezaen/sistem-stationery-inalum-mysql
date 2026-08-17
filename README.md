@@ -104,9 +104,13 @@ php artisan stock:seed-initial --reason="Saldo awal"
 php artisan stock:snapshot --current
 ```
 
-`migrate --seed` membuat role & permission, struktur departemen, **katalog 236 item Inalum**
-(dari `database/data/stationery-items.csv`), dan — di luar produksi — **organisasi demo**
-(28 akun) untuk pengujian alur. Semua kata sandi demo: `password`.
+`migrate --seed` membuat role & permission, departemen dasar, **katalog 236 item Inalum**
+(dari `database/data/stationery-items.csv`), dan — di luar produksi — **organisasi karyawan**
+(`EmployeeSeeder`): seluruh karyawan sebagai requester + 5 akun approver. Kata sandi: `password`.
+
+> **Data karyawan** dibaca dari `database/data/employees.csv` (namecode, nama, seksi). Berkas itu
+> memuat PII sehingga **tidak di-commit** (gitignored); seeder melewatinya dengan aman bila tak
+> ada, dan tetap membuat akun approver.
 
 > **Catatan zona waktu.** Aplikasi berjalan pada UTC dan koneksi MySQL dipaksa ke `+00:00`
 > (`config/database.php`). Timestamp disimpan UTC; konversi tampilan ke Asia/Jakarta
@@ -141,32 +145,34 @@ dengan hot-reload, ganti `npm run build` dengan `npm run dev`.
 
 ## Alur Request & Peran
 
+**Alur terpadu** — satu alur untuk seluruh seksi; ketiga approver berbasis **role global**:
+
 ```
-Requester  →  Pimpinan User (L1)  →  PIC Stationery (L2)  →  Pimpinan SGA (L3)  →  PIC Gudang
- buat &         setujui / tolak        tetapkan QTY ACTUAL      setujui / tolak      serah terima
- ajukan        (atasan langsung)       + remark (kuantitatif)   (final)              → stok berkurang
+Requester  →  Pimpinan SIT (L1)  →  PIC Stationery (L2)  →  Pimpinan SGA (L3)  →  PIC Gudang
+ buat &         setujui / tolak       tetapkan QTY ACTUAL      setujui / tolak      serah terima
+ ajukan        (role global)         + remark (kuantitatif)   (final)              → stok berkurang
 ```
 
 | # | Tahap | Pelaku | Aksi | Status setelahnya |
 |---|---|---|---|---|
-| 1 | Buat & ajukan | Requester | Pilih item + qty, submit | `Pending Approval Pimpinan` |
-| 2 | Approval L1 | **Pimpinan User** = atasan langsung (`users.manager_id`) | Setujui / Tolak + alasan | `Pending Approval PIC Stationery` / `Ditolak Pimpinan` |
+| 1 | Buat & ajukan | Requester (karyawan mana pun) | Pilih item + qty, submit | `Pending Approval Pimpinan` |
+| 2 | Approval L1 | **Pimpinan SIT** (role global, seluruh seksi) | Setujui / Tolak + alasan | `Pending Approval PIC Stationery` / `Ditolak Pimpinan` |
 | 3 | Approval L2 | **PIC Stationery** | **Tetapkan qty per baris** (≤ diminta) + remark, atau tolak seluruhnya | `Pending Approval Pimpinan SGA` / `Ditolak PIC Stationery` |
 | 4 | Approval L3 | **Pimpinan SGA** (berbasis role, global) | Setujui / Tolak (qty read-only) | `Pengambilan Item` / `Ditolak Pimpinan SGA` |
 | 5 | Serah terima | **PIC Gudang** | Serahkan (boleh sebagian bila stok kurang) | `Selesai` (stok berkurang) |
 
 **Detail penting:**
 
-- **Approval L1 diarahkan ke atasan langsung** requester (`users.manager_id`), bukan role
-  global. Karena itu **setiap requester wajib punya atasan** (Pimpinan User). Requester tanpa
-  atasan **ditolak di depan** saat submit — bukan dibiarkan menggantung. Akun tanpa atasan
-  (mis. `admin`, VP) memang bukan aktor pengajuan request.
+- **Approval L1 berbasis role global** (**Pimpinan SIT**), berlaku untuk seluruh seksi —
+  bukan atasan langsung. Karena itu **karyawan tidak perlu punya atasan** (`manager_id`) untuk
+  mengajukan. L2 (PIC Stationery) dan L3 (Pimpinan SGA) juga berbasis role. Akun `admin`
+  mengelola sistem, bukan aktor pengajuan request.
 - **Approval L2 bersifat kuantitatif** — PIC Stationery mengubah `quantity` per baris (hanya
   boleh mengurangi), bukan sekadar memindahkan status.
 - **Reservasi (ADR-07).** Saat L2 menyetujui, stok **direservasi** (`reserved_quantity`
   bertambah; `stock_quantity` tidak berubah) hingga barang diserahkan atau request
   dibatalkan/ditolak SGA. Stok tersedia = `stock_quantity − reserved_quantity`.
-- **Tiga titik penolakan → tiga tujuan revisi:** ditolak Pimpinan User → **requester**
+- **Tiga titik penolakan → tiga tujuan revisi:** ditolak Pimpinan SIT → **requester**
   revisi; ditolak PIC Stationery → **final** (buat request baru); ditolak Pimpinan SGA →
   **PIC Stationery** revisi.
 
@@ -175,7 +181,7 @@ Requester  →  Pimpinan User (L1)  →  PIC Stationery (L2)  →  Pimpinan SGA 
 | Peran | Kapabilitas inti |
 |---|---|
 | `requester` | Role dasar semua pegawai — buat/ajukan/revisi/batalkan request miliknya |
-| `supervisor` (Pimpinan User) | Approval **L1** atas request bawahan langsung |
+| `supervisor` (Pimpinan SIT) | Approval **L1** untuk seluruh seksi (role global) |
 | `pic_stationery` (PIC Stationery) | Approval **L2** kuantitatif, verifikasi pembelian, kelola master item |
 | `sga_manager` (Pimpinan SGA) | Approval **L3** final, lingkup global |
 | `warehouse_officer` (PIC Gudang) | Input pembelian, serah terima barang |
@@ -188,36 +194,25 @@ Requester  →  Pimpinan User (L1)  →  PIC Stationery (L2)  →  Pimpinan SGA 
 
 ## Akun Demo
 
-Seeder demo (`DemoUserSeeder`, **hanya non-produksi**) membangun organisasi berjenjang
-menyerupai struktur nyata: 4 divisi → 14 departemen → 28 akun. Setiap staff beratasan
-Pimpinan seksinya; setiap Pimpinan beratasan VP divisinya — sehingga semua bisa mengajukan
-request. Kata sandi seragam: `password`.
+`EmployeeSeeder` (**hanya non-produksi**) menyeed **seluruh karyawan** sebagai requester +
+5 akun approver tetap. Karena alurnya terpadu, karyawan mana pun bisa mengajukan dan L1 selalu
+jatuh ke Pimpinan SIT. Kata sandi seragam: `password`.
 
-**Staff requester (untuk menguji pengajuan):**
-
-| Username | Nama | Seksi | Atasan (L1) |
-|---|---|---|---|
-| `mawan` | Mawan Irwansyah | SIT | `ms.sit` |
-| `budi` | Budi Santoso | General Affairs | `ms.ga` |
-| `dani` | Dani Ramadhan | Peleburan | `ms.red` |
-| `fitri` | Fitri Handayani | Pencetakan | `ms.cas` |
-| `wawan` | Wawan Setiawan | Keuangan | `ms.fin` |
-
-*(daftar lengkap staff & Pimpinan lain ada di `database/seeders/DemoUserSeeder.php`)*
-
-**Fungsi approval & khusus:**
+**Akun approver & fungsi (tetap):**
 
 | Username | Peran |
 |---|---|
-| `ms.*` (10 Pimpinan seksi) | Approval **L1** untuk staf seksinya |
-| `pic.stationery` | Approval **L2** + verifikasi pembelian |
-| `vp.sga` | Approval **L3** (Pimpinan SGA) |
+| `pimpinan.sit` | Approval **L1** — Pimpinan SIT (seluruh seksi) |
+| `pic.stationery` | Approval **L2** kuantitatif + verifikasi pembelian |
+| `vp.sga` | Approval **L3** final (Pimpinan SGA) |
 | `pic.gudang` | Serah terima barang |
 | `admin` | Administrator (bukan aktor request) |
 
-**Contoh uji alur penuh:** `dani` (buat request) → `ms.red` (L1) → `pic.stationery` (L2) →
-`vp.sga` (L3) → `pic.gudang` (serah terima). L2/L3/gudang selalu akun yang sama; hanya L1
-mengikuti seksi requester.
+**Karyawan (requester):** username = `namecode` karyawan (mis. `nik_37298009`), diseed dari
+`database/data/employees.csv`. Bila berkas itu tidak ada, hanya akun approver yang dibuat.
+
+**Contoh uji alur penuh:** login karyawan mana pun → `pimpinan.sit` (L1) → `pic.stationery`
+(L2) → `vp.sga` (L3) → `pic.gudang` (serah terima). Ketiga approver sama untuk semua seksi.
 
 ---
 
@@ -310,7 +305,7 @@ Modul `Reporting` **hanya membaca** (tidak pernah menulis ledger). Tersedia 8 la
 - **Request by Month / Year / Account / Item** (R4–R7) — rekap request; "Account" = Departemen/Seksi.
 
 Setiap laporan dapat **diekspor ke .xlsx** dan dicetak PDF. Dashboard menampilkan statistik
-ringkas; Pimpinan User dibatasi lingkup departemennya.
+ringkas sesuai kewenangan: requester hanya ringkasan miliknya, approver lingkup perusahaan.
 
 ---
 
@@ -347,14 +342,9 @@ Pintasan Composer:
 
 ## Troubleshooting
 
-**Request tidak dapat diajukan — "belum memiliki atasan".** Approval L1 diarahkan ke atasan
-langsung (`users.manager_id`). Requester tanpa atasan tidak punya tujuan approval, jadi
-pengajuannya ditolak. Pastikan requester punya `manager_id` (di produksi dari impor HR);
-untuk uji, gunakan akun staff pada tabel [Akun Demo](#akun-demo), bukan `admin`.
-
 **Tombol Setujui/Tolak tidak muncul di layar Verify.** Tombol digerbangi
 `Gate::can('approveL{1,2,3}', $request)`. Periksa berurutan: (1) level & akun sudah tepat
-(L1 = atasan langsung, L2 = `pic.stationery`, L3 = `vp.sga`); (2) reset cache permission
+(L1 = `pimpinan.sit`, L2 = `pic.stationery`, L3 = `vp.sga`); (2) reset cache permission
 `php artisan permission:cache-reset && php artisan optimize:clear`; (3) aset frontend basi —
 `npm run build` lalu hard refresh (Ctrl+Shift+R).
 
