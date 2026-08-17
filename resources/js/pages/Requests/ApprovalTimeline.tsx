@@ -13,7 +13,7 @@ export interface TimelineRow {
 }
 
 const LEVEL_LABEL: Record<number, string> = {
-    1: 'Pimpinan User',
+    1: 'Pimpinan SIT',
     2: 'PIC Stationery',
     3: 'Pimpinan SGA',
 };

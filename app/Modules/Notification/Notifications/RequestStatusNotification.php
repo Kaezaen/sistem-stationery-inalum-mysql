@@ -73,7 +73,7 @@ class RequestStatusNotification extends Notification implements ShouldQueue
         $reason = $this->reason ?? '-';
 
         return match ($this->type) {
-            NotificationType::RequestSubmitted => "Request {$num} menunggu persetujuan Anda sebagai Pimpinan User.",
+            NotificationType::RequestSubmitted => "Request {$num} menunggu persetujuan Anda sebagai Pimpinan SIT.",
             NotificationType::RequestApprovedL1 => "Request {$num} telah disetujui Pimpinan dan menunggu verifikasi Anda.",
             NotificationType::RequestRejectedL1 => "Request {$num} ditolak Pimpinan. Alasan: {$reason}",
             NotificationType::RequestApprovedL2 => "Request {$num} menunggu persetujuan Anda sebagai Pimpinan SGA.",

@@ -20,7 +20,7 @@ enum Role: string
     {
         return match ($this) {
             self::Requester => 'Requester',
-            self::Supervisor => 'Pimpinan User',
+            self::Supervisor => 'Pimpinan SIT',
             self::PicStationery => 'PIC Stationery',
             self::SgaManager => 'Pimpinan SGA',
             self::WarehouseOfficer => 'PIC Gudang',
@@ -32,7 +32,7 @@ enum Role: string
     {
         return match ($this) {
             self::Requester => 'Role dasar seluruh pegawai — mengajukan request ATK.',
-            self::Supervisor => 'Approval Level 1 atas request bawahan langsungnya.',
+            self::Supervisor => 'Approval Level 1 (Pimpinan SIT) untuk seluruh seksi.',
             self::PicStationery => 'Approval Level 2 (kuantitatif), kelola master item, verifikasi pembelian.',
             self::SgaManager => 'Approval Level 3 — keputusan final.',
             self::WarehouseOfficer => 'Input pembelian dan serah terima barang ke user.',
