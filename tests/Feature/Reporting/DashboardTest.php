@@ -14,8 +14,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 | Dashboard monitoring (fitur 5) — payload disesuaikan kewenangan.
 |
 | Dashboard adalah halaman depan SEMUA pengguna, jadi yang paling penting diuji:
-| requester biasa tidak menerima statistik organisasi/stok yang bukan haknya, dan
-| Pimpinan User hanya melihat statistik departemennya.
+| requester biasa tidak menerima statistik organisasi/stok yang bukan haknya, sedang
+| approver (PIC Stationery / SGA / Pimpinan SIT) menerima statistik seluruh perusahaan.
 */
 
 uses(RefreshDatabase::class);
@@ -50,7 +50,10 @@ it('memberi PIC Stationery statistik organisasi dan stok', function (): void {
         ->and($data['orgRequests']['trend'])->toHaveCount(6);
 });
 
-it('membatasi statistik Pimpinan User ke departemennya sendiri', function (): void {
+it('memberi Pimpinan SIT (L1) statistik seluruh perusahaan', function (): void {
+    // Alur approval terpadu: Pimpinan SIT adalah approver L1 untuk SELURUH seksi,
+    // sehingga dashboard-nya mencakup statistik seluruh perusahaan — bukan satu
+    // departemen (RequestViewAll).
     $ownDept = Department::factory()->create();
     $otherDept = Department::factory()->create();
 
@@ -71,8 +74,8 @@ it('membatasi statistik Pimpinan User ke departemennya sendiri', function (): vo
     $selesai = collect($data['orgRequests']['byStatus'])
         ->firstWhere('label', RequestStatus::Completed->label());
 
-    // Hanya 2 dari departemennya sendiri, bukan 3.
-    expect($selesai['count'])->toBe(2);
+    // Seluruh 3 request (semua departemen), bukan hanya departemennya sendiri.
+    expect($selesai['count'])->toBe(3);
 });
 
 it('merender halaman dashboard', function (): void {
