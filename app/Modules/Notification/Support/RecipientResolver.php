@@ -35,20 +35,6 @@ class RecipientResolver
     }
 
     /**
-     * Atasan langsung (Pimpinan User) dari requester — penerima approval L1 (N1).
-     *
-     * @return Collection<int, User>
-     */
-    public function supervisorOf(User $user): Collection
-    {
-        $manager = $user->manager;
-
-        return $manager instanceof User && $manager->is_active
-            ? collect([$manager])
-            : collect();
-    }
-
-    /**
      * Satu user tertentu bila masih aktif (mis. requester, pembuat pembelian).
      *
      * @return Collection<int, User>

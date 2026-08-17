@@ -94,9 +94,9 @@ it('memberi nomor request berurutan', function (): void {
 |--------------------------------------------------------------------------
 */
 
-it('menolak pengajuan bila requester belum punya atasan (Pimpinan User)', function (): void {
-    // Akar REQ004: requester tanpa manager_id membuat approval L1 tak punya
-    // tujuan, sehingga request akan mandek permanen bila diloloskan.
+it('mengizinkan pengajuan tanpa atasan langsung (alur terpadu)', function (): void {
+    // Alur terpadu: L1 (Pimpinan SIT) berbasis role global, sehingga requester
+    // TIDAK perlu punya atasan langsung untuk mengajukan request.
     $tanpaAtasan = User::factory()->create([
         'department_id' => $this->requester->department_id,
         'manager_id' => null,
@@ -107,11 +107,10 @@ it('menolak pengajuan bila requester belum punya atasan (Pimpinan User)', functi
         ['item_id' => $this->item->id, 'quantity' => 5],
     ]);
 
-    expect(fn () => $this->requests->submit($request))
-        ->toThrow(BusinessRuleException::class, 'belum memiliki atasan');
+    $submitted = $this->requests->submit($request);
 
-    // Tidak masuk antrian approval — tetap Draft.
-    expect($request->refresh()->status)->toBe(RequestStatus::Draft);
+    // Langsung masuk antrian Pimpinan (L1), tak mandek di Draft.
+    expect($submitted->status)->toBe(RequestStatus::PendingSupervisor);
 });
 
 /*

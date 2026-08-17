@@ -32,9 +32,10 @@ class RequestNotificationSubscriber
     public function handleSubmitted(RequestSubmitted $event): void
     {
         $request = $event->request;
-        $requester = $request->requester;
 
-        $recipients = $requester !== null ? $this->resolver->supervisorOf($requester) : collect();
+        // N1 → Pimpinan SIT (L1). Alur approval terpadu: L1 berbasis role global
+        // untuk seluruh seksi, bukan atasan langsung requester.
+        $recipients = $this->resolver->withRole(Role::Supervisor);
 
         $this->send($recipients, new RequestStatusNotification(
             NotificationType::RequestSubmitted,

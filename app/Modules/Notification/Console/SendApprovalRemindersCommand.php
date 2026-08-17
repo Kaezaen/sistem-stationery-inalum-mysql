@@ -45,9 +45,7 @@ class SendApprovalRemindersCommand extends Command
             ->chunkById(200, function ($requests) use ($resolver, &$sent): void {
                 foreach ($requests as $request) {
                     $recipients = match ($request->status) {
-                        RequestStatus::PendingSupervisor => $request->requester !== null
-                            ? $resolver->supervisorOf($request->requester)
-                            : collect(),
+                        RequestStatus::PendingSupervisor => $resolver->withRole(Role::Supervisor),
                         RequestStatus::PendingStationery => $resolver->withRole(Role::PicStationery),
                         RequestStatus::PendingSga => $resolver->withRole(Role::SgaManager),
                         default => collect(),

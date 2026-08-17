@@ -87,8 +87,11 @@ enum Permission: string
             self::ItemView,
         ];
 
+        // Alur approval terpadu: L1 (Pimpinan SIT) berlaku untuk SELURUH seksi,
+        // bukan atasan langsung. Karena itu ia harus melihat SEMUA request yang
+        // menunggu L1 — RequestViewAll, bukan RequestViewSubordinate.
         $supervisor = [
-            self::RequestViewSubordinate,
+            self::RequestViewAll,
             self::RequestApproveL1,
             self::ReportRequestView,
             self::ReportExport,

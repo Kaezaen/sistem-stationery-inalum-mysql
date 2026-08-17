@@ -8,64 +8,27 @@ use App\Modules\Identity\Models\Department;
 use Illuminate\Database\Seeder;
 
 /**
- * Struktur departemen — divisi (induk) dan seksi (anak), menyerupai organisasi
- * Inalum: Operasi (peleburan/pencetakan/karbon), Pemeliharaan (mesin/listrik),
- * Keuangan & Korporat (keuangan/SDM/TI), serta Support & General Affairs (pemilik
- * proses ATK).
+ * Departemen dasar (produksi) — SGA (pemilik proses ATK & approval final) dan SIT
+ * (pemegang approval L1 pada alur terpadu). Cukup untuk menampung akun approver.
  *
- * SGA dan SIT dipertahankan kodenya karena muncul di wireframe blueprint. `parent_id`
- * membentuk hierarki divisi→seksi; `account_code` dipakai laporan Request by Account
- * (keputusan D3). Struktur final produksi tetap diisi lewat import data HR sebelum
- * go-live (risiko K1 roadmap) — updateOrCreate di sini aman ditimpa.
+ * Struktur seksi lengkap organisasi diisi dari data HR: di non-produksi lewat
+ * EmployeeSeeder (membaca database/data/employees.csv), di produksi lewat impor HR.
  */
 class DepartmentSeeder extends Seeder
 {
     public function run(): void
     {
-        // Divisi (induk) — tanpa atasan departemen.
-        $divisions = [
+        $departments = [
             ['code' => 'SGA', 'name' => 'Support & General Affairs', 'account_code' => '5400'],
-            ['code' => 'OPS', 'name' => 'Divisi Operasi', 'account_code' => '5100'],
-            ['code' => 'MTN', 'name' => 'Divisi Pemeliharaan', 'account_code' => '5200'],
-            ['code' => 'FKT', 'name' => 'Divisi Keuangan & Korporat', 'account_code' => '5300'],
+            ['code' => 'SIT', 'name' => 'System & Information Technology', 'account_code' => '5303'],
         ];
 
-        /** @var array<string, int> $divisionIds */
-        $divisionIds = [];
-
-        foreach ($divisions as $division) {
-            $divisionIds[$division['code']] = Department::updateOrCreate(
-                ['code' => $division['code']],
-                [
-                    'name' => $division['name'],
-                    'account_code' => $division['account_code'],
-                    'parent_id' => null,
-                    'is_active' => true,
-                ],
-            )->id;
-        }
-
-        // Seksi (anak) — masing-masing di bawah satu divisi.
-        $sections = [
-            ['code' => 'GA', 'name' => 'General Affairs', 'parent' => 'SGA', 'account_code' => '5401'],
-            ['code' => 'PRC', 'name' => 'Pengadaan (Procurement)', 'parent' => 'SGA', 'account_code' => '5402'],
-            ['code' => 'RED', 'name' => 'Peleburan (Reduction Plant)', 'parent' => 'OPS', 'account_code' => '5101'],
-            ['code' => 'CAS', 'name' => 'Pencetakan (Casting Plant)', 'parent' => 'OPS', 'account_code' => '5102'],
-            ['code' => 'CAR', 'name' => 'Carbon Plant', 'parent' => 'OPS', 'account_code' => '5103'],
-            ['code' => 'MEC', 'name' => 'Pemeliharaan Mesin (Mechanical)', 'parent' => 'MTN', 'account_code' => '5201'],
-            ['code' => 'ELE', 'name' => 'Listrik & Instrumentasi (Electrical)', 'parent' => 'MTN', 'account_code' => '5202'],
-            ['code' => 'FIN', 'name' => 'Keuangan & Akuntansi', 'parent' => 'FKT', 'account_code' => '5301'],
-            ['code' => 'HRD', 'name' => 'Sumber Daya Manusia', 'parent' => 'FKT', 'account_code' => '5302'],
-            ['code' => 'SIT', 'name' => 'System & Information Technology', 'parent' => 'FKT', 'account_code' => '5303'],
-        ];
-
-        foreach ($sections as $section) {
+        foreach ($departments as $department) {
             Department::updateOrCreate(
-                ['code' => $section['code']],
+                ['code' => $department['code']],
                 [
-                    'name' => $section['name'],
-                    'account_code' => $section['account_code'],
-                    'parent_id' => $divisionIds[$section['parent']],
+                    'name' => $department['name'],
+                    'account_code' => $department['account_code'],
                     'is_active' => true,
                 ],
             );

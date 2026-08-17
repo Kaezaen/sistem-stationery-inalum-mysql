@@ -29,3 +29,7 @@ Thumbs.db
 
 # Dokumen internal — tidak disertakan di repo publik
 /docs
+
+# Data karyawan nyata (PII: nama + NIK) — JANGAN commit ke repo publik.
+# Seeder EmployeeSeeder membacanya secara lokal bila tersedia.
+/database/data/employees.csv

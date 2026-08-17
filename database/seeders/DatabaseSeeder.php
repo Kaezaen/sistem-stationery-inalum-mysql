@@ -22,9 +22,9 @@ class DatabaseSeeder extends Seeder
             StationeryItemSeeder::class,
         ]);
 
-        // Akun contoh hanya untuk lingkungan non-produksi.
+        // Organisasi & akun (karyawan nyata + approver) hanya untuk non-produksi.
         if (! app()->environment('production')) {
-            $this->call(DemoUserSeeder::class);
+            $this->call(EmployeeSeeder::class);
         }
     }
 }

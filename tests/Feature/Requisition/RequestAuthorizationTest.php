@@ -55,24 +55,23 @@ function makeRequest(int $qty = 10): Request
 
 /*
 |--------------------------------------------------------------------------
-| T6 — Pimpinan seksi lain tidak boleh menyetujui
+| Alur approval terpadu — L1 oleh Pimpinan mana pun (seluruh seksi)
 |--------------------------------------------------------------------------
 */
 
-it('menolak approval Level 1 oleh pimpinan yang bukan atasan langsung', function (): void {
+it('mengizinkan approval Level 1 oleh Pimpinan seksi mana pun', function (): void {
     /*
-     * Aturan keamanan terpenting Fase 5. Pimpinan B memegang permission
-     * request.approve.l1 yang sama persis dengan Pimpinan A — matriks permission
-     * TIDAK akan menangkap kasus ini. Hanya Policy yang tahu siapa atasan
-     * requester-nya.
+     * Alur terpadu: L1 (Pimpinan SIT) berbasis role global dan berlaku untuk
+     * SELURUH seksi — bukan atasan langsung. Pimpinan B, dari seksi berbeda dari
+     * requester, tetap boleh menyetujui L1.
      */
     $request = makeRequest();
 
     $this->actingAs($this->pimpinanB)
         ->post("/requests/verify/{$request->id}/approve")
-        ->assertForbidden();
+        ->assertRedirect('/requests/verify');
 
-    expect($request->refresh()->status)->toBe(RequestStatus::PendingSupervisor);
+    expect($request->refresh()->status)->toBe(RequestStatus::PendingStationery);
 });
 
 it('mengizinkan approval Level 1 oleh atasan langsung', function (): void {
@@ -85,24 +84,27 @@ it('mengizinkan approval Level 1 oleh atasan langsung', function (): void {
     expect($request->refresh()->status)->toBe(RequestStatus::PendingStationery);
 });
 
-it('menolak penolakan Level 1 oleh pimpinan seksi lain', function (): void {
+it('mengizinkan penolakan Level 1 oleh Pimpinan seksi mana pun', function (): void {
     $request = makeRequest();
 
     $this->actingAs($this->pimpinanB)
         ->post("/requests/verify/{$request->id}/reject", ['rejection_notes' => 'tidak setuju'])
-        ->assertForbidden();
+        ->assertRedirect();
+
+    expect($request->refresh()->status)->toBe(RequestStatus::RejectedSupervisor);
 });
 
-it('menyembunyikan request seksi lain dari antrian pimpinan', function (): void {
-    // Pimpinan B tidak boleh melihat request bawahan Pimpinan A di antriannya.
+it('menampilkan request pada antrian seluruh Pimpinan (alur terpadu)', function (): void {
+    // Setiap Pimpinan (L1) melihat semua request yang menunggu L1, tak peduli
+    // seksi requester-nya.
     makeRequest();
 
-    $this->actingAs($this->pimpinanB)
+    $this->actingAs($this->pimpinanA)
         ->get('/requests/verify')
         ->assertOk()
-        ->assertInertia(fn ($page) => $page->where('requests.total', 0));
+        ->assertInertia(fn ($page) => $page->where('requests.total', 1));
 
-    $this->actingAs($this->pimpinanA)
+    $this->actingAs($this->pimpinanB)
         ->get('/requests/verify')
         ->assertInertia(fn ($page) => $page->where('requests.total', 1));
 });

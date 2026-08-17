@@ -92,18 +92,16 @@ class RequestPolicy
     */
 
     /**
-     * Level 1 — HANYA atasan langsung requester.
+     * Level 1 — berbasis role (alur approval terpadu).
      *
-     * Aturan paling penting di kelas ini. Blueprint mengarahkan approval L1 ke
-     * atasan langsung (users.manager_id), bukan ke siapa pun yang kebetulan
-     * memegang role supervisor.
+     * Approval L1 (Pimpinan SIT) berlaku untuk SELURUH seksi, bukan atasan
+     * langsung requester. Cukup pemegang role L1 pada status yang tepat — sama
+     * pola dengan L2 dan L3.
      */
     public function approveL1(User $user, Request $request): bool
     {
         return $user->can(Permission::RequestApproveL1->value)
-            && $request->status === RequestStatus::PendingSupervisor
-            && $request->requester !== null
-            && $user->isDirectManagerOf($request->requester);
+            && $request->status === RequestStatus::PendingSupervisor;
     }
 
     public function approveL2(User $user, Request $request): bool
