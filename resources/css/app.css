@@ -42,6 +42,8 @@
     --color-ring: var(--ring);
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-border: var(--sidebar-border);
 
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
@@ -77,8 +79,13 @@
     --input: #e2e8f0;
     --ring: #2563eb;
 
-    --sidebar: #ffffff;
-    --sidebar-foreground: #1e293b;
+    /* Sidebar navy Inalum — gelap agar kontras dengan konten terang & tampak
+       branded (diturunkan dari primary #2563eb). Item nav memakai overlay putih
+       transparan untuk hover/aktif sehingga cocok di terang maupun gelap. */
+    --sidebar: #122a4a;
+    --sidebar-foreground: #dfe7f2;
+    --sidebar-primary: #60a5fa;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
 }
 
 .dark {
@@ -107,8 +114,10 @@
     --input: rgba(255, 255, 255, 0.12);
     --ring: #3b82f6;
 
-    --sidebar: #0f1729;
-    --sidebar-foreground: #e6edf5;
+    --sidebar: #0d1626;
+    --sidebar-foreground: #d3ddec;
+    --sidebar-primary: #60a5fa;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
 }
 
 @layer base {

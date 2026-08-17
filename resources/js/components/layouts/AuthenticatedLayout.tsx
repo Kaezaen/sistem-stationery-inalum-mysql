@@ -224,11 +224,13 @@ function initials(name: string): string {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     const className = cn(
         'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-        active && 'bg-accent font-medium text-accent-foreground',
+        active && 'bg-white/10 font-medium text-sidebar-foreground',
         active &&
-            "before:absolute before:top-1/2 before:-left-4 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-primary before:content-['']",
-        !active && item.href && 'text-muted-foreground hover:bg-muted hover:text-foreground',
-        !item.href && 'cursor-not-allowed text-muted-foreground/40',
+            "before:absolute before:top-1/2 before:-left-4 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-sidebar-primary before:content-['']",
+        !active &&
+            item.href &&
+            'text-sidebar-foreground/65 hover:bg-white/5 hover:text-sidebar-foreground',
+        !item.href && 'cursor-not-allowed text-sidebar-foreground/30',
     );
 
     const content = (
@@ -284,12 +286,16 @@ export default function AuthenticatedLayout({
 
     return (
         <div className="flex min-h-full">
-            <aside className="hidden w-64 shrink-0 border-r bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
-                <div className="flex h-16 items-center gap-2.5 border-b px-5">
-                    <Link href="/" className="flex items-center" aria-label="Beranda">
-                        <InalumLogo className="h-7 w-auto" />
+            <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
+                <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
+                    <Link
+                        href="/"
+                        className="flex items-center rounded-md bg-white px-2 py-1"
+                        aria-label="Beranda"
+                    >
+                        <InalumLogo className="h-6 w-auto" />
                     </Link>
-                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-sidebar-foreground/80 uppercase">
                         Stationery
                     </span>
                 </div>
@@ -298,7 +304,7 @@ export default function AuthenticatedLayout({
                     {groups.map((group, index) => (
                         <div key={group.heading ?? `group-${index}`} className="space-y-1">
                             {group.heading && (
-                                <p className="px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                <p className="px-3 pb-1 text-xs font-medium tracking-wide text-sidebar-foreground/45 uppercase">
                                     {group.heading}
                                 </p>
                             )}
