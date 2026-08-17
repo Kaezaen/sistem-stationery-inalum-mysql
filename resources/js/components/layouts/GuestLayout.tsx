@@ -18,7 +18,7 @@ export default function GuestLayout({
     const year = new Date().getFullYear();
 
     return (
-        <div className="flex min-h-full">
+        <div className="flex min-h-screen">
             {/* Panel brand — hanya tampil di layar lebar */}
             <motion.aside
                 className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-primary via-blue-700 to-blue-900 p-10 text-white lg:flex xl:w-[55%]"

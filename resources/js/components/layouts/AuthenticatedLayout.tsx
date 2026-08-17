@@ -33,8 +33,8 @@ interface NavItem {
     label: string;
     href: string | null;
     icon: typeof LayoutDashboard;
-    /** Permission yang dibutuhkan agar item tampil. null = selalu tampil. */
-    permission?: string;
+    /** Permission agar item tampil. Array = tampil bila memegang SALAH SATU. null = selalu tampil. */
+    permission?: string | string[];
 }
 
 interface NavGroup {
@@ -71,7 +71,7 @@ const NAVIGATION: NavGroup[] = [
                 label: 'Verify Request Items',
                 href: '/requests/verify',
                 icon: ClipboardCheck,
-                permission: 'request.approve.l1',
+                permission: ['request.approve.l1', 'request.approve.l2', 'request.approve.l3'],
             },
             {
                 label: 'Serah Terima Item',
@@ -266,7 +266,13 @@ export default function AuthenticatedLayout({
     // Ini hanya menyembunyikan menu — otorisasi sesungguhnya ada di Policy server.
     const groups = NAVIGATION.map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.permission || can(item.permission)),
+        items: group.items.filter(
+            (item) =>
+                !item.permission ||
+                (Array.isArray(item.permission)
+                    ? item.permission.some((p) => can(p))
+                    : can(item.permission)),
+        ),
     })).filter((group) => group.items.length > 0);
 
     // Href terpanjang yang cocok yang menang, sehingga '/items/create' menyalakan
@@ -283,8 +289,8 @@ export default function AuthenticatedLayout({
             .sort((a, b) => b.length - a.length)[0] ?? null;
 
     return (
-        <div className="flex min-h-full">
-            <aside className="sidebar-surface hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
+        <div className="flex min-h-screen">
+            <aside className="sidebar-surface hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
                 <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
                     <Link
                         href="/"
