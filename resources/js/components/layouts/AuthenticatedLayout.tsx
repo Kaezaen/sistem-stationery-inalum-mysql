@@ -224,12 +224,10 @@ function initials(name: string): string {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     const className = cn(
         'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-        active && 'bg-white/10 font-medium text-sidebar-foreground',
+        active && 'bg-sidebar-primary/15 font-medium text-white',
         active &&
-            "before:absolute before:top-1/2 before:-left-4 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-sidebar-primary before:content-['']",
-        !active &&
-            item.href &&
-            'text-sidebar-foreground/65 hover:bg-white/5 hover:text-sidebar-foreground',
+            "before:absolute before:top-1/2 before:-left-4 before:h-7 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-sidebar-primary before:content-['']",
+        !active && item.href && 'text-sidebar-foreground/65 hover:bg-white/5 hover:text-white',
         !item.href && 'cursor-not-allowed text-sidebar-foreground/30',
     );
 
@@ -286,7 +284,7 @@ export default function AuthenticatedLayout({
 
     return (
         <div className="flex min-h-full">
-            <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
+            <aside className="sidebar-surface hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
                 <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
                     <Link
                         href="/"
