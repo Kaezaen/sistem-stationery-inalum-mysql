@@ -3,7 +3,7 @@ import InalumLogo from '@/components/shared/InalumLogo';
 import { usePermission } from '@/hooks/use-permission';
 import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
     BarChart3,
     Bell,
@@ -16,6 +16,7 @@ import {
     FileSpreadsheet,
     LayoutDashboard,
     LogOut,
+    Menu,
     PackageCheck,
     PackagePlus,
     PackageSearch,
@@ -26,7 +27,9 @@ import {
     TrendingUp,
     Users,
     Warehouse,
+    X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 interface NavItem {
@@ -253,6 +256,58 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     );
 }
 
+/** Baris logo + label di kepala sidebar. Tombol tutup hanya muncul di drawer mobile. */
+function SidebarBrand({ onClose }: { onClose?: () => void }) {
+    return (
+        <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
+            <Link
+                href="/"
+                className="flex items-center rounded-md bg-white px-2 py-1"
+                aria-label="Beranda"
+            >
+                <InalumLogo className="h-6 w-auto" />
+            </Link>
+            <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-sidebar-foreground/80 uppercase">
+                Stationery
+            </span>
+            {onClose && (
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="ml-auto rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Tutup menu"
+                >
+                    <X className="size-5" aria-hidden />
+                </button>
+            )}
+        </div>
+    );
+}
+
+/** Daftar grup + item navigasi. Dipakai bersama sidebar desktop dan drawer mobile. */
+function SidebarNav({ groups, activeHref }: { groups: NavGroup[]; activeHref: string | null }) {
+    return (
+        <nav className="flex-1 space-y-6 overflow-y-auto p-4">
+            {groups.map((group, index) => (
+                <div key={group.heading ?? `group-${index}`} className="space-y-1">
+                    {group.heading && (
+                        <p className="px-3 pb-1 text-xs font-medium tracking-wide text-sidebar-foreground/45 uppercase">
+                            {group.heading}
+                        </p>
+                    )}
+                    {group.items.map((item) => (
+                        <NavLink
+                            key={item.label}
+                            item={item}
+                            active={item.href !== null && item.href === activeHref}
+                        />
+                    ))}
+                </div>
+            ))}
+        </nav>
+    );
+}
+
 export default function AuthenticatedLayout({
     header,
     children,
@@ -261,6 +316,26 @@ export default function AuthenticatedLayout({
     const { can } = usePermission();
     const currentPath = new URL(ziggy.location).pathname;
     const unread = notifications?.unread ?? 0;
+
+    // Drawer navigasi untuk layar < lg (mobile/tablet). Sidebar desktop tetap statis.
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+    // Tutup drawer setiap kali navigasi dimulai (klik menu, tombol back, redirect).
+    useEffect(() => router.on('start', () => setMobileNavOpen(false)), []);
+
+    // Saat drawer terbuka: kunci scroll latar & izinkan Escape untuk menutup.
+    useEffect(() => {
+        if (!mobileNavOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setMobileNavOpen(false);
+        };
+        document.addEventListener('keydown', onKey);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            document.body.style.overflow = '';
+        };
+    }, [mobileNavOpen]);
 
     // Item tanpa permission selalu tampil; sisanya mengikuti kewenangan user.
     // Ini hanya menyembunyikan menu — otorisasi sesungguhnya ada di Policy server.
@@ -290,45 +365,57 @@ export default function AuthenticatedLayout({
 
     return (
         <div className="flex min-h-screen">
+            {/* Sidebar desktop — statis, hanya ≥ lg. */}
             <aside className="sidebar-surface hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-                <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
-                    <Link
-                        href="/"
-                        className="flex items-center rounded-md bg-white px-2 py-1"
-                        aria-label="Beranda"
-                    >
-                        <InalumLogo className="h-6 w-auto" />
-                    </Link>
-                    <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-sidebar-foreground/80 uppercase">
-                        Stationery
-                    </span>
-                </div>
-
-                <nav className="flex-1 space-y-6 overflow-y-auto p-4">
-                    {groups.map((group, index) => (
-                        <div key={group.heading ?? `group-${index}`} className="space-y-1">
-                            {group.heading && (
-                                <p className="px-3 pb-1 text-xs font-medium tracking-wide text-sidebar-foreground/45 uppercase">
-                                    {group.heading}
-                                </p>
-                            )}
-                            {group.items.map((item) => (
-                                <NavLink
-                                    key={item.label}
-                                    item={item}
-                                    active={item.href !== null && item.href === activeHref}
-                                />
-                            ))}
-                        </div>
-                    ))}
-                </nav>
+                <SidebarBrand />
+                <SidebarNav groups={groups} activeHref={activeHref} />
             </aside>
 
-            <div className="flex min-w-0 flex-1 flex-col">
-                <header className="flex h-16 items-center justify-between gap-4 border-b bg-card px-6">
-                    <div className="min-w-0">{header}</div>
+            {/* Drawer navigasi mobile/tablet — geser dari kiri di atas overlay. */}
+            <AnimatePresence>
+                {mobileNavOpen && (
+                    <>
+                        <motion.div
+                            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={() => setMobileNavOpen(false)}
+                            aria-hidden
+                        />
+                        <motion.aside
+                            className="sidebar-surface fixed inset-y-0 left-0 z-50 flex w-72 max-w-[82%] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:hidden"
+                            initial={{ x: '-100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '-100%' }}
+                            transition={{ type: 'tween', duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label="Menu navigasi"
+                        >
+                            <SidebarBrand onClose={() => setMobileNavOpen(false)} />
+                            <SidebarNav groups={groups} activeHref={activeHref} />
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
 
-                    <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-col">
+                <header className="flex h-16 items-center justify-between gap-4 border-b bg-card px-4 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setMobileNavOpen(true)}
+                            className="-ml-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"
+                            aria-label="Buka menu navigasi"
+                        >
+                            <Menu className="size-5" aria-hidden />
+                        </button>
+                        <div className="min-w-0">{header}</div>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3">
                         <Link
                             href="/notifications"
                             className="relative rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -381,7 +468,7 @@ export default function AuthenticatedLayout({
 
                 <FlashToast flash={flash} />
 
-                <main className="flex-1 p-6">
+                <main className="flex-1 p-4 sm:p-6">
                     {/* Entrance transform-only (opasitas tetap 1) agar konten tak
                         pernah tak terlihat bila animasi tertunda; halaman berisi
                         tabel tetap aman. Efek fade yang lebih kaya ada per-halaman. */}

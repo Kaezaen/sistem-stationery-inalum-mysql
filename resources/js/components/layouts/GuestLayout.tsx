@@ -1,4 +1,4 @@
-import InalumLogo, { InalumMark } from '@/components/shared/InalumLogo';
+import InalumLogo from '@/components/shared/InalumLogo';
 import { fadeUp, scaleIn, staggerContainer } from '@/lib/motion';
 import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -19,24 +19,27 @@ export default function GuestLayout({
 
     return (
         <div className="flex min-h-screen">
-            {/* Panel brand — hanya tampil di layar lebar */}
+            {/* Panel brand — hanya tampil di layar lebar (≥ lg). Warna navy
+                senada dengan sidebar aplikasi agar tampilan konsisten. */}
             <motion.aside
-                className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-primary via-blue-700 to-blue-900 p-10 text-white lg:flex xl:w-[55%]"
+                className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-b from-[#17365f] via-[#122a4a] to-[#0e1f3a] p-10 text-white lg:flex xl:w-[55%]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4 }}
             >
-                {/* Aksen dekoratif */}
+                {/* Dekorasi tunggal & halus: pola titik tipis + satu cahaya lembut
+                    di sudut. Sengaja subtil dan tidak menimpa teks agar rapi. */}
                 <div
-                    className="pointer-events-none absolute -top-20 -left-16 size-72 rounded-full bg-white/10 blur-3xl"
+                    className="pointer-events-none absolute inset-0 opacity-[0.12]"
+                    style={{
+                        backgroundImage:
+                            'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1.5px)',
+                        backgroundSize: '24px 24px',
+                    }}
                     aria-hidden
                 />
                 <div
-                    className="pointer-events-none absolute top-1/3 right-8 size-56 rounded-full bg-tertiary/30 blur-3xl"
-                    aria-hidden
-                />
-                <InalumMark
-                    className="pointer-events-none absolute -right-12 -bottom-12 h-80 w-auto rotate-12 opacity-10"
+                    className="pointer-events-none absolute -top-24 -right-24 size-80 rounded-full bg-sidebar-primary/20 blur-3xl"
                     aria-hidden
                 />
 
@@ -54,27 +57,30 @@ export default function GuestLayout({
                     </motion.div>
 
                     <motion.div className="max-w-md" variants={fadeUp}>
-                        <h2 className="text-3xl leading-tight font-semibold tracking-tight">
+                        <p className="text-xs font-semibold tracking-[0.2em] text-white/50 uppercase">
+                            PT Indonesia Asahan Aluminium
+                        </p>
+                        <h2 className="mt-3 text-3xl leading-tight font-semibold tracking-tight">
                             Sistem Manajemen Stationery
                         </h2>
-                        <p className="mt-3 text-white/80">
+                        <p className="mt-3 text-white/75">
                             Standarisasi pengajuan dan verifikasi pembelian Alat Tulis Kantor —
                             cepat, transparan, dan terekam.
                         </p>
 
-                        <ul className="mt-8 space-y-3 text-sm text-white/90">
+                        <ul className="mt-8 space-y-3.5 text-sm">
                             {FEATURES.map((feature) => (
                                 <li key={feature} className="flex items-center gap-3">
-                                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/20">
-                                        <Check className="size-3" aria-hidden />
+                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
+                                        <Check className="size-3.5" aria-hidden />
                                     </span>
-                                    {feature}
+                                    <span className="text-white/85">{feature}</span>
                                 </li>
                             ))}
                         </ul>
                     </motion.div>
 
-                    <motion.p className="text-xs text-white/60" variants={fadeUp}>
+                    <motion.p className="text-xs text-white/50" variants={fadeUp}>
                         © {year} PT Indonesia Asahan Aluminium
                     </motion.p>
                 </motion.div>
